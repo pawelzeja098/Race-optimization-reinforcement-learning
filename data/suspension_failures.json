@@ -1,0 +1,44 @@
+[
+    {
+        "name": "Shock Absorber Leak",
+        "fixtime": 1800,
+        "garage": "True",
+        "stock_number": 4,
+        "propability": 0.3,
+        "speed_reduction": 0.25,
+        "speed_reduction_night": 0.25,
+        "failure_deterioration": 0.05,
+        "next_failure": "CriticalFailure",
+        "fuel_penalty": 0.1,
+        "chance_of_repair_failure": 0.15,
+        "suspension_threshold": 0.4
+    },
+    {
+        "name": "Suspension Bearing Failure",
+        "fixtime": 1500,
+        "garage": "True",
+        "stock_number": 4,
+        "propability": 0.4,
+        "speed_reduction": 0.15,
+        "speed_reduction_night": 0.15,
+        "failure_deterioration": 0.03,
+        "next_failure": "Suspension Damage",
+        "fuel_penalty": 0.05,
+        "chance_of_repair_failure": 0.1,
+        "suspension_threshold": 0.5
+    },
+    {
+        "name": "Suspension Spring Breakage",
+        "fixtime": 3500,
+        "garage": "True",
+        "stock_number": 3,
+        "propability": 0.5,
+        "speed_reduction": 0.35,
+        "speed_reduction_night": 0.35,
+        "failure_deterioration": 0.07,
+        "next_failure": "CriticalFailure",
+        "fuel_penalty": 0.2,
+        "chance_of_repair_failure": 0.2,
+        "suspension_threshold": 0.1
+    }
+]

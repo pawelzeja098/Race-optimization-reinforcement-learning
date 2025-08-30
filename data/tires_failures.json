@@ -1,0 +1,30 @@
+[
+    {
+        "name": "Tire puncture",
+        "fixtime": 60,
+        "garage": "False",
+        "stock_number": 12,
+        "propability": 0.50,
+        "speed_reduction": 0.30,
+        "speed_reduction_night": 0.10,
+        "failure_deterioration": 0,
+        "next_failure": "Tire blowout",
+        "fuel_penalty": 0.02,
+        "chance_of_repair_failure": 0.05,
+        "tires_threshold": 0.4
+    },
+    {
+        "name": "Tire blowout",
+        "fixtime": 300,
+        "garage": "False",
+        "stock_number": 6,
+        "propability": 0.20,
+        "speed_reduction": 0.80,
+        "speed_reduction_night": 0.80,
+        "failure_deterioration": 0.1,
+        "next_failure": "Suspension damage",
+        "fuel_penalty": 0.05,
+        "chance_of_repair_failure": 0.10,
+        "tires_threshold": 0.2
+    }
+]

@@ -1,0 +1,74 @@
+[
+    {
+        "name": "Sunny",
+        "failure_probability": 0.005,
+        "speed_reduction": 0.0,
+        "speed_reduction_night": 0.0,
+        "surface_grip": 1.0,
+        "tire_wear": 0.05,
+        "next_weather": ["Cloudy","Sunny"],
+        "wet" : 0
+    },
+    {
+        "name" : "Light rain",
+        "failure_probability" : 0.01,
+        "speed_reduction" : 0.05,
+        "speed_reduction_night" : 0.07,
+        "surface_grip": 0.85,
+        "tire_wear": 0.1,
+        "next_weather" : ["Heavy rain","Sunny"],
+        "wet" : 0.3
+        
+    },
+    {
+        "name": "Heavy rain",
+        "failure_probability": 0.05,
+        "speed_reduction": 0.15,
+        "speed_reduction_night": 0.20,
+        "surface_grip": 0.60,
+        "tire_wear": 0.2,
+        "next_weather": ["Thunderstorms", "Light rain"],
+        "wet" : 0.7
+    },
+    {
+        "name": "Foggy",
+        "failure_probability": 0.02,
+        "speed_reduction": 0.10,
+        "speed_reduction_night": 0.15,
+        "surface_grip": 0.90,
+        "tire_wear": 0.05,
+        "next_weather": ["Light rain", "Cloudy"],
+        "wet" : 0
+    },
+    {
+        "name": "Windy",
+        "failure_probability": 0.03,
+        "speed_reduction": 0.08,
+        "speed_reduction_night": 0.12,
+        "surface_grip": 0.95,
+        "tire_wear": 0.07,
+        "next_weather": ["Cloudy", "Sunny"],
+        "wet" : 0
+    },
+    {
+        "name": "Thunderstorms",
+        "failure_probability": 0.10,
+        "speed_reduction": 0.30,
+        "speed_reduction_night": 0.35,
+        "surface_grip": 0.50,
+        "tire_wear": 0.25,
+        "next_weather": ["Heavy rain", "Foggy"],
+        "wet" : 1
+    },
+    {
+        "name": "Cloudy",
+        "failure_probability": 0.02,
+        "speed_reduction": 0.03,
+        "speed_reduction_night": 0.05,
+        "surface_grip": 0.95,
+        "tire_wear": 0.04,
+        "next_weather": ["Sunny", "Light rain"],
+        "wet" : 0
+        
+    }
+]
