@@ -26,10 +26,19 @@ class TelemetryClient:
         buffer = ""
         while self.running:
             try:
-                data = self.sock.recv(self.buffer_size).decode("utf-8")
+                # data = self.sock.recv(self.buffer_size).decode("utf-8")
+                # if not data:
+                #     break
+                # buffer += data
+                data = self.sock.recv(self.buffer_size)
                 if not data:
                     break
-                buffer += data
+                try:
+                    text = data.decode("utf-8", errors="ignore")
+                except Exception as e:
+                    print("Decode error:", e)
+                    continue
+                buffer += text
 
                 # Plugin prawdopodobnie wysyła JSONy po \n
                 while "\n" in buffer:
