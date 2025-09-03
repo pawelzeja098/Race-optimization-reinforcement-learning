@@ -1,3 +1,5 @@
+from envs.core.carClasses.tires_class import Tire
+
 def pitstop(self,fuel_level, failures_list,fix_engine,fix_suspension, fix_brakes,tire_change,fuel ,new_tires):
         """
         Funkcja symulująca pitstop: wymiana opon, naprawa usterek, uzupełnienie paliwa.

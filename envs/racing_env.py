@@ -9,18 +9,18 @@ import psutil
 import os
 import time
 import threading
-from ..core.carClasses.car_failure import CarFailure
-from ..core.carClasses.race_car import RaceCar
-from ..core.weatherClass.weather_class import Weather
-from ..core.carClasses.tires_class import Tire
-from ..core.failureClasses.brakes_failure_class import BrakesFailure
-from ..core.failureClasses.engine_failure_class import EngineFailure
-from ..core.failureClasses.suspension_failure_class import SuspensionFailure
-from ..core.failureClasses.tires_failure_class import TiresFailure
+from envs.core.carClasses.car_failure import CarFailure
+from envs.core.carClasses.race_car import RaceCar
+from envs.core.weatherClass.weather_class import Weather
+from envs.core.carClasses.tires_class import Tire
+from envs.core.failureClasses.brakes_failure_class import BrakesFailure
+from envs.core.failureClasses.engine_failure_class import EngineFailure
+from envs.core.failureClasses.suspension_failure_class import SuspensionFailure
+from envs.core.failureClasses.tires_failure_class import TiresFailure
 from multiprocessing import Pool
 import gymnasium as gym
 from gymnasium import spaces
-from ..env.carClass import Car
+from carClass import Car
 
 #pobranie możliwych usterek dla danego podzespołu i w jakim momencie zużycia jest ryzyko ich wystąpienia
 failures_engine = EngineFailure.load_from_file()
@@ -57,6 +57,7 @@ class RacingEnv(gym.Env):
         self.lap_time_start = lap1["lap_data"]["lap_time"]
         self.total_time = 0
 
+        
 
         self.car = Car()
         

@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import random
 import numpy as np
 from collections import deque
-from backend.app.env.racing_env import RacingEnv
+from envs.racing_env import RacingEnv
 
 class  PolicyNetwork(nn.Module):
     def __init__(self, state_dim,action_space):
