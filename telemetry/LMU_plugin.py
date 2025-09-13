@@ -64,21 +64,6 @@ class TelemetryClient:
         if self.sock:
             self.sock.close()
 
-# if __name__ == "__main__":
-#     client = TelemetryClient()
-#     client.start()
-
-#     import time
-#     try:
-#         while True:   # działa cały czas
-#             data = client.get_latest()
-#             if data:
-#                 print(json.dumps(data, indent=2))  # drukuje CAŁY JSON ładnie sformatowany
-#             time.sleep(1)  # 20 Hz, możesz zmienić
-#     except KeyboardInterrupt:
-#         print("\nZatrzymano klienta.")
-#     finally:
-#         client.stop()
 
 if __name__ == "__main__":
     client = TelemetryClient()
@@ -94,7 +79,7 @@ if __name__ == "__main__":
         scoring_saved = False
         i = 0
         curr_sector = -1
-        while i != 3:  # Limit to 100 iterations
+        while True:  # Limit to 100 iterations
             data = client.get_latest()
             
             if data:
@@ -102,47 +87,62 @@ if __name__ == "__main__":
 
                 # zapis ScoringInfoV01
                 if data.get("Type") == "ScoringInfoV01":
+                    print(f"ScoringInfoV01 {i}")
                     for vehicle in data.get("mVehicles", []):
+
                         if vehicle.get("mIsPlayer"):
-                            
-                            wanted_weather_keys = ["mRaining","mAmbientTemp","mTrackTemp"]
+                            print("Found player vehicle")
+                            wanted_weather_keys = ["mRaining","mAmbientTemp","mTrackTemp","mEndET", "mCurrentET"]
                             subset_weather = {k: data.get(k) for k in wanted_weather_keys}
                             
                             
                             vehicle_sector = vehicle.get("mSector", -1)
                             #save only if sector changed
                             if vehicle_sector == curr_sector:
+                                print(f"curr_sector: {curr_sector}, vehicle_sector: {vehicle_sector}")
                                 continue
-
+                            print(f"Sector changed: {curr_sector} -> {vehicle_sector}")
                             curr_sector = vehicle_sector
-                            wanted_keys = ["mCurrentET", "mEndET","mLastLapTime","mBestLapTime","mCurrLapTime","mNumPitstops","mNumPenalties","mInPits"]
+                            wanted_keys = ["mLastLapTime","mBestLapTime","mCurrLapTime","mNumPitstops","mNumPenalties","mInPits"]
                             subset_scoring_vehicle = {k: vehicle.get(k) for k in wanted_keys}
 
                             # print(json.dumps(vehicle, indent=2))
                             # scoring_records.append(data)
                             scoring_records.append({**subset_scoring_vehicle, **subset_weather})
-                            with open(scoring_file, "w") as f:
-                                json.dump(scoring_records, f, indent=2)
+                            
                             
                             scoring_saved = True
 
                 # zapis TelemInfoV01
                 elif data.get("Type") == "TelemInfoV01" and scoring_saved:
 
-                    telem_records.append(data)
+                    
 
-                    wanted_keys = ["mFuel", "mFuelCapacity","mWheel","mDentSeverity"]
+                    wanted_keys = ["mFuel", "mFuelCapacity","mWheel","mDentSeverity","mFrontTireCompoundIndex","mCurrentSector"]
+
 
                     subset = {k: data.get(k) for k in wanted_keys}
-                
-                    print(json.dumps(data, indent=2))
-                    with open(telem_file, "w") as f:
-                        json.dump(telem_records, f, indent=2)
+
+                    subset["mWheel"] = [
+                            {
+                                "mWear": wheel.get("mWear"),
+                                "mBrakeTemp": wheel.get("mBrakeTemp"),
+                                "mTemperature": wheel.get("mTemperature"),
+                            }
+                            for wheel in data.get("mWheel", [])
+                        ]
+                    telem_records.append(subset)
+                    print(json.dumps(subset, indent=2))
+                    
                     scoring_saved = False
                     i += 1
-            time.sleep(1)  # 20 Hz
+            # time.sleep(0.05)  # 20 Hz
     except KeyboardInterrupt:
         print("\nZatrzymano klienta.")
     finally:
+        with open(telem_file, "w") as f:
+            json.dump(telem_records, f, indent=2)
+        with open(scoring_file, "w") as f:
+            json.dump(scoring_records, f, indent=2)
         client.stop()
         print(f"Zapisano dane do {scoring_file} i {telem_file}")
