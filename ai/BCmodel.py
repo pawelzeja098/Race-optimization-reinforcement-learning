@@ -16,7 +16,12 @@ class BCModel(nn.Module):
         super(BCModel, self).__init__()
         self.fc1 = nn.Linear(state_dim, 128)
         self.fc2 = nn.Linear(128, 128)
-        self.output_layer = nn.Linear(128, action_dim)
+        
+
+        # Każda dyskretna akcja ma własną warstwę wyjściową
+        self.output_layers = nn.ModuleList()
+        for n in action_dim:
+            self.output_layers.append(nn.Linear(128, n))
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
@@ -41,3 +46,13 @@ def load_data(file_path):
 
 def save_model(model, path):
     torch.save(model.state_dict(), path)
+
+
+if __name__ == "__main__":
+    env = RacingEnv()
+    
+    model = BCModel(state_dim=22, action_dim=[2,5,2,23])
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    criterion = nn.CrossEntropyLoss()
+    batch_size = 64
+    num_epochs = 20

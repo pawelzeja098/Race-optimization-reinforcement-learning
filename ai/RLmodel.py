@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import random
 import numpy as np
 from collections import deque
-from envs.racing_env_old import RacingEnv
+from envs.racing_env import RacingEnv
 
 class  PolicyNetwork(nn.Module):
     def __init__(self, state_dim,action_space):
@@ -20,7 +20,11 @@ class  PolicyNetwork(nn.Module):
 
         
 
-        self.output_layer = nn.Linear(128, sum(self.action_space.nvec))
+        
+        # Każda dyskretna akcja ma własną warstwę wyjściową
+        self.output_layers = nn.ModuleList()
+        for n in self.action_space.nvec:
+            self.output_layers.append(nn.Linear(128, n))
 
         
 

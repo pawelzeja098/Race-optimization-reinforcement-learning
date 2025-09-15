@@ -69,8 +69,8 @@ if __name__ == "__main__":
     client = TelemetryClient()
     client.start()
 
-    scoring_file = "data/scoring_data.json"
-    telem_file = "data/telemetry_data.json"
+    scoring_file = "data/raw_races/scoring_data.json"
+    telem_file = "data/raw_races/telemetry_data.json"
 
     scoring_records = []
     telem_records = []
@@ -83,60 +83,22 @@ if __name__ == "__main__":
             data = client.get_latest()
             
             if data:
-                
-
                 # zapis ScoringInfoV01
                 if data.get("Type") == "ScoringInfoV01":
                     print(f"ScoringInfoV01 {i}")
-                    for vehicle in data.get("mVehicles", []):
-
-                        if vehicle.get("mIsPlayer"):
-                            print("Found player vehicle")
-                            wanted_weather_keys = ["mRaining","mAmbientTemp","mTrackTemp","mEndET", "mCurrentET"]
-                            subset_weather = {k: data.get(k) for k in wanted_weather_keys}
+            
+                    scoring_records.append({data})
                             
                             
-                            vehicle_sector = vehicle.get("mSector", -1)
-                            #save only if sector changed
-                            if vehicle_sector == curr_sector:
-                                print(f"curr_sector: {curr_sector}, vehicle_sector: {vehicle_sector}")
-                                continue
-                            print(f"Sector changed: {curr_sector} -> {vehicle_sector}")
-                            curr_sector = vehicle_sector
-                            wanted_keys = ["mLastLapTime","mBestLapTime","mCurrLapTime","mNumPitstops","mNumPenalties","mInPits"]
-                            subset_scoring_vehicle = {k: vehicle.get(k) for k in wanted_keys}
-
-                            # print(json.dumps(vehicle, indent=2))
-                            # scoring_records.append(data)
-                            scoring_records.append({**subset_scoring_vehicle, **subset_weather})
-                            
-                            
-                            scoring_saved = True
+                    scoring_saved = True
 
                 # zapis TelemInfoV01
                 elif data.get("Type") == "TelemInfoV01" and scoring_saved:
 
-                    
-
-                    wanted_keys = ["mFuel", "mFuelCapacity","mWheel","mDentSeverity","mFrontTireCompoundIndex","mCurrentSector"]
-
-
-                    subset = {k: data.get(k) for k in wanted_keys}
-
-                    subset["mWheel"] = [
-                            {
-                                "mWear": wheel.get("mWear"),
-                                "mBrakeTemp": wheel.get("mBrakeTemp"),
-                                "mTemperature": wheel.get("mTemperature"),
-                            }
-                            for wheel in data.get("mWheel", [])
-                        ]
-                    telem_records.append(subset)
-                    print(json.dumps(subset, indent=2))
-                    
-                    scoring_saved = False
+                    telem_records.append(data)
+                  
                     i += 1
-            # time.sleep(0.05)  # 20 Hz
+            time.sleep(1)  # 20 Hz
     except KeyboardInterrupt:
         print("\nZatrzymano klienta.")
     finally:
