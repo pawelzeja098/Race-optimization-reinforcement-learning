@@ -2,3 +2,9 @@ data/weather_data_real/26_Weather_Race_Hour 24.csv
 data
 envs/__pycache__/generate_actions_BC.cpython-312.pyc
 envs/__pycache__/generate_state_BC.cpython-312.pyc
+ai/__pycache__/__init__.cpython-312.pyc
+ai/__pycache__/BCmodel.cpython-312.pyc
+envs/__pycache__/filtr_json_from_race.cpython-312.pyc
+envs/__pycache__/racing_env.cpython-312.pyc
+envs/__pycache__/racing_env_old.cpython-312.pyc
+telemetry/__pycache__/LMU_plugin.cpython-312.pyc

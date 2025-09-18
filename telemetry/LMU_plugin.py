@@ -32,7 +32,7 @@ class TelemetryClient:
                 # buffer += data
                 data = self.sock.recv(self.buffer_size)
                 if not data:
-                    break
+                    continue
                 try:
                     text = data.decode("utf-8", errors="ignore")
                 except Exception as e:
@@ -55,6 +55,7 @@ class TelemetryClient:
     def get_latest(self, timeout=0.1):
         """Zwraca ostatnią paczkę telemetryczną (lub None)"""
         try:
+            # self.queue.get(timeout=timeout)
             return self.queue.get(timeout=timeout)
         except Empty:
             return None
@@ -65,7 +66,8 @@ class TelemetryClient:
             self.sock.close()
 
 
-if __name__ == "__main__":
+def collect_telemetry(usage_multiplier=1.0):
+    print("Starting telemetry collection...")
     client = TelemetryClient()
     client.start()
 
@@ -78,27 +80,63 @@ if __name__ == "__main__":
     try:
         scoring_saved = False
         i = 0
+        scoring_counter = 0
+        
         curr_sector = -1
-        while True:  # Limit to 100 iterations
+        while True:
             data = client.get_latest()
-            
-            if data:
-                # zapis ScoringInfoV01
-                if data.get("Type") == "ScoringInfoV01":
-                    print(f"ScoringInfoV01 {i}")
-            
-                    scoring_records.append({data})
-                            
-                            
-                    scoring_saved = True
 
-                # zapis TelemInfoV01
-                elif data.get("Type") == "TelemInfoV01" and scoring_saved:
+            
+            if data and data.get("Type") == "ScoringInfoV01":
+                scoring_counter += 1
+                if scoring_counter % 2 != 0:
+                    continue  # zapisujemy co drugą paczkę ScoringInfoV01
 
-                    telem_records.append(data)
-                  
-                    i += 1
-            time.sleep(1)  # 20 Hz
+                
+                vehicles = data.get("mVehicles", [])
+
+                # znajdź gracza
+                player_vehicle = None
+                for v in vehicles:
+                    if v.get("mIsPlayer") == True:  # albo warunek po nazwie kierowcy
+                        player_vehicle = v
+                        break
+
+                if player_vehicle:
+                    # robimy kopię oryginalnego data
+                    filtered_data = dict(data)
+                    filtered_data["mVehicles"] = [player_vehicle]
+
+                    while True:
+                        try:
+                            _ = client.queue.get_nowait()
+                        except Empty:
+                            break  # pusta kolejka → koniec czyszczenia
+
+                    # szukamy najbliższego TelemInfoV01
+                    telem = None
+                    for _ in range(10):  # max 10 prób
+                        msg = client.get_latest(timeout=0.1)
+                        if msg and msg.get("Type") == "TelemInfoV01":
+                            telem = msg
+                            break
+                        time.sleep(0.05)
+
+                    if telem:
+                        # scoring_records.append(filtered_data)
+                        # telem_records.append(telem)
+                        # i += 1
+
+                        print (f"Pair {i} zapisane (Lap: {player_vehicle['mTotalLaps']}, Sector: {player_vehicle['mSector']})")
+
+                        # dodajemy dopiero tutaj, w parze
+                        telem["multiplier"] = usage_multiplier
+                        scoring_records.append(filtered_data)
+                        telem_records.append(telem)
+
+                        i += 1
+
+              
     except KeyboardInterrupt:
         print("\nZatrzymano klienta.")
     finally:
@@ -108,3 +146,35 @@ if __name__ == "__main__":
             json.dump(scoring_records, f, indent=2)
         client.stop()
         print(f"Zapisano dane do {scoring_file} i {telem_file}")
+
+
+
+
+  # zapis TelemInfoV01
+                # elif data.get("Type") == "TelemInfoV01" and scoring_saved:
+                #     data["multiplier"] = usage_multiplier  
+                #     telem_records.append(data)
+                  
+                #     i += 1
+            # time.sleep(5)  # 20 Hz
+                # if data.get("Type") == "ScoringInfoV01":
+                #     vehicles = data.get("mVehicles", [])
+                #     player_vehicle = next((v for v in vehicles if v.get("mIsPlayer") == "true"), None)
+
+                #     if player_vehicle:
+                #         filtered_data = dict(data)
+                #         filtered_data["mVehicles"] = [player_vehicle]
+
+                #         # czekamy na najbliższy TelemInfoV01
+                #         telem = None
+                #         while telem is None:
+                #             msg = client.get_latest()
+                #             if msg and msg.get("Type") == "TelemInfoV01":
+                #                 telem = msg
+                        
+                #         telem["multiplier"] = usage_multiplier
+                #         scoring_records.append(filtered_data)
+                #         telem_records.append(telem)
+
+                #         print(f"Pair {i} zapisane (Lap: {player_vehicle['mLapNumber']})")
+                #         i += 1
