@@ -21,7 +21,7 @@ The goal of this project is to:
 - Experiment with more advanced architectures (e.g., **LSTM/RNN** for sequential dependencies).
 
 ## 🛠️ Technologies
-- **Python 3**, **PyTorch**, **Scikit-learn** – neural network training and inference  
+- **Python**, **PyTorch**, **Scikit-learn** – neural network training and inference  
 - **NumPy, SQlite** – data handling and preprocessing  
 - **Matplotlib** – visualization 
 
