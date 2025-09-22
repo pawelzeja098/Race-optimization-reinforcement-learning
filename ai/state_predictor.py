@@ -19,7 +19,7 @@ class RaceModel(nn.Module):
     def __init__(self):
         super().__init__()
         self.shared = nn.Sequential(
-            nn.Linear(32,128), nn.ReLU(),
+            nn.Linear(34,128), nn.ReLU(),
             nn.Linear(128,128), nn.ReLU()
         )
         self.cont_head = nn.Linear(128,12)             # ciągłe
@@ -36,7 +36,7 @@ class RaceModel(nn.Module):
     
     def scale_input(self, X_grouped,Y_grouped):
          # --- Continous and discrete feature indices ---
-        cont_indices = [0,1,2,3,4,5,6,7,8,9,10,11]          # continuous
+        cont_indices = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]          # continuous
         cat_indices  = [12,13,14,15,16,17,18,19]  # discrete
 
         # --- Scale continuous features ---

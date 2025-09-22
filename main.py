@@ -12,13 +12,13 @@ from pathlib import Path
 
 
 if __name__ == "__main__":
-    # usage_multiplier = 3.0  # Ustawienia wyścigu
+    # usage_multiplier = 1.0  # Ustawienia wyścigu
     # collect_telemetry(usage_multiplier)
     
 
     data_dir = Path(r"E:/pracadyp/Race-optimization-reinforcement-learning/data/raw_races")
 
-    for telem_path in data_dir.glob("telemetry_data_*.json"):
+    for telem_path in data_dir.glob("telemetry_data*.json"):
         # Tworzymy odpowiadającą nazwę scoring
         scoring_path = data_dir / telem_path.name.replace("telemetry", "scoring")
         if scoring_path.exists():

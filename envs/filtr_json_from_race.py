@@ -77,7 +77,7 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
             continue
         if telemetry_records_len >= scoring_records_len:
             break
-        wanted_keys = ["mFuel", "mFuelCapacity","mWheel","mDentSeverity","mFrontTireCompoundIndex","mCurrentSector","mLapNumber","multiplier"]
+        wanted_keys = ["mFuel", "mFuelCapacity","mWheel","mDentSeverity","mFrontTireCompoundIndex","mCurrentSector","mLapNumber","mLastImpactET","mLastImpactMagnitude","multiplier"]
 
         avg_temp = 0
         subset = {k: entry.get(k) for k in wanted_keys}
@@ -132,7 +132,11 @@ def extract_state(telem_file_raw, scoring_file_raw):
         for i in range(len(telemetry_all)):
             telemetry = telemetry_all[i]
             scoring = scoring_all[i]
-          
+
+            if telemetry["mLastImpactET"] <= 0:
+                telemetry["mLastImpactET"] = 0.0
+            else:
+                telemetry["mLastImpactET"] = scoring["mCurrentET"] - telemetry["mLastImpactET"]
             
             last_lap = scoring["mLastLapTime"]
             best_lap = scoring["mBestLapTime"]
@@ -168,10 +172,15 @@ def extract_state(telem_file_raw, scoring_file_raw):
                 round(sum(telemetry["mWheel"][3]["mTemperature"])/len(telemetry["mWheel"][3]["mTemperature"]), 5),
                 scoring["mAvgPathWetness"],
 
-
-                #dane dyskretne
-                
+                #dane pomocnicze ciągłe
+                telemetry["mLastImpactET"],
+                telemetry["mLastImpactMagnitude"],
                 scoring["mNumPenalties"],
+                scoring["mRaining"],
+                round(scoring["mAmbientTemp"], 2),
+                round(scoring["mTrackTemp"], 2),
+
+                #dane dyskretne pomocniczne
                 
                 
                 telemetry["mDentSeverity"][0],  # Not defined which part of the car this refers to each index
@@ -183,9 +192,6 @@ def extract_state(telem_file_raw, scoring_file_raw):
                 telemetry["mDentSeverity"][6], 
                 telemetry["mDentSeverity"][7],
 
-                #dane pomocnicze
-                
-
                 has_last_lap,
                 scoring["mFinishStatus"],
                 scoring["mTotalLaps"],
@@ -193,12 +199,9 @@ def extract_state(telem_file_raw, scoring_file_raw):
                 scoring["mNumPitstops"],
                 int(scoring["mInPits"]),
                 telemetry["mFrontTireCompoundIndex"],
-                scoring["mRaining"],
-                round(scoring["mAmbientTemp"], 2),
-                round(scoring["mTrackTemp"], 2),
-                
                 telemetry["multiplier"],
 
+                #ciągłe nie używane do trenowania
                 last_lap,
                 best_lap,
                 
