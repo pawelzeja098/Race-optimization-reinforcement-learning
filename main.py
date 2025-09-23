@@ -25,10 +25,7 @@ if __name__ == "__main__":
             save_to_db(str(telem_path), str(scoring_path))
 
 
-    # telem_files_raw = [r"E:/pracadyp/Race-optimization-reinforcement-learning/data/raw_races/telemetry_data_x330min_goodver.json",r"E:/pracadyp/Race-optimization-reinforcement-learning/data/raw_races/telemetry_data_x330min_goodver.json", r"E:/pracadyp/Race-optimization-reinforcement-learning/data/raw_races/telemetry_data_x310min.json"]
-    # scoring_files_raw = [r"E:/pracadyp/Race-optimization-reinforcement-learning/data/raw_races/scoring_data_x330min_goodver.json",r"E:/pracadyp/Race-optimization-reinforcement-learning/data/raw_races/scoring_data_x330min_goodver.json", r"E:/pracadyp/Race-optimization-reinforcement-learning/data/raw_races/scoring_data_x310min.json"]
-    # for telem_file_raw, scoring_file_raw in zip(telem_files_raw, scoring_files_raw):
-    #     save_to_db(telem_file_raw, scoring_file_raw)
+ 
     
     load_from_db()
 
