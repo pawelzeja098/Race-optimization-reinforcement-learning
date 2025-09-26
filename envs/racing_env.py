@@ -139,6 +139,8 @@ class RacingEnv(gym.Env):
 
     def step(self,action):
         # possible_power_settings = [0.5,0.6,0.7,0.8,0.9,1]
+        pit_entry_line = 13483.0
+        pit_exit_line = 390.0
         self.state = self._extract_state(self.telemetry_data[self.current_lap], self.scoring_data[self.current_lap])
         
         self.current_lap += 1

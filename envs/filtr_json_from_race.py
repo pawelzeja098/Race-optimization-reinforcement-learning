@@ -137,6 +137,9 @@ def extract_state(telem_file_raw, scoring_file_raw):
                 telemetry["mLastImpactET"] = 0.0
             else:
                 telemetry["mLastImpactET"] = scoring["mCurrentET"] - telemetry["mLastImpactET"]
+
+                if telemetry["mLastImpactET"] < 0:
+                    telemetry["mLastImpactET"] = 0.0
             
             last_lap = scoring["mLastLapTime"]
             best_lap = scoring["mBestLapTime"]
