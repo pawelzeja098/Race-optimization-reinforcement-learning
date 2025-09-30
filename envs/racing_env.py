@@ -7,6 +7,8 @@ matplotlib.use('TkAgg')
 
 import gymnasium as gym
 from gymnasium import spaces
+from weather_generator import generate_weather_conditions
+from impact_generator import random_impact_magnitude, generate_dent_severity
 
 data_race_scoring = "data/scoring_data.json"
 data_race_telemetry = "data/telemetry_data.json"
@@ -17,6 +19,7 @@ class RacingEnv(gym.Env):
 
         self.lap = 0
         self.usage_multiplier = 1.0
+        self.checked_pit = False
         
 
         with open(data_race_scoring, "r") as file:
@@ -33,40 +36,63 @@ class RacingEnv(gym.Env):
         
         self.observation_space = gym.spaces.Box(
     low=np.array([
-        0.0,   # mLastLapTime (zakładamy nieujemny)
-        0.0,   # mHasLastLap (bool, ale jako float 0/1)
-        0.0,   # mBestLapTime
-        0.0,   # mCurrLapTime
-        0.0,   # mInPits (bool, ale jako float 0/1)
-        0.0,   # mNumPitstops
-        0.0,   # mRaining
-        -50.0, # mAmbientTemp (np. -50 do +60 C)
-        -50.0, # mTrackTemp
-        0.0,   # mEndET
-        0.0,   # mCurrentET
-        0.0,   # mFuel
-        0.0,   # mFuelCapacity
-        0.0,   # avg tire wear
+        0.0,   # Lap Dist
+        0.0,   # Race complete %
+        0.0,   # Tank capacity
+        0.0,   # Wheel wear
+        0.0,   # Wheel wear
+        0.0,   # Wheel wear
+        0.0,   # Wheel wear
+        0.0,   # Wheel temperature
+        0.0,   # Wheel temperature
+        0.0,   # Wheel temperature
+        0.0,   # Wheel temperature
+        0.0,   # Path wetness
+        0.0,   # Last impact ET
+        0.0,   # Last impact magnitude
+        0.0,   # Number of penalties
+        0.0,   # Raining
+        0.0,   # Ambient temp
+        0.0,   # Track temp
         0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  # dent severities
+        0.0,   # #has last lap
+        0.0,   # Finish status
+        0.0,   # Total laps
+        0.0,   # Sector
+        0.0,   # Num pitstops
+        0.0,   # In pits
         0.0,   # tire compound index
+        1.0    # multiplier
+
     ], dtype=np.float32),
     high=np.array([
-        10000.0, # mLastLapTime (max np. 10000 s)
-        1.0,     # mHasLastLap (bool, ale jako float 0/1)
-        10000.0, # mBestLapTime
-        10000.0, # mCurrLapTime
-        1.0,     # mInPits
-        50.0,    # mNumPitstops (duży limit)
-        1.0,     # mRaining
-        60.0,    # mAmbientTemp
-        100.0,   # mTrackTemp
-        100000.0,# mEndET
-        100000.0,# mCurrentET
-        200.0,   # mFuel
-        200.0,   # mFuelCapacity
-        1.0,     # avg tire wear (0-1)
+        1,2,     # Lap Dist
+        2.0,     # Race complete %
+        1.1,     # Tank capacity
+        1.0,     # Wheel wear
+        1.0,     # Wheel wear
+        1.0,     # Wheel wear
+        1.0,     # Wheel wear
+        600.0,   # Wheel temperature
+        600.0,   # Wheel temperature
+        600.0,   # Wheel temperature
+        600.0,   # Wheel temperature
+        1.0,    # Path wetness
+        86500.0,   # Last impact ET
+        50000.0,     # Last impact magnitude
+        100.0,   # Number of penalties
+        1.0,   # Raining
+        45.0,   # Ambient temp
+        60.0,   # Track temp
         2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0,  # dent severities
+        1.0,   # #has last lap
+        1.0,   # Finish status
+        500.0,   # Total laps
+        2.0,   # Sector
+        100.0,   # Num pitstops
+        1.0,   # In pits
         3.0,    # tire compound index
+        1.0    # multiplier
     ], dtype=np.float32),
     dtype=np.float32
 )
@@ -134,16 +160,83 @@ class RacingEnv(gym.Env):
         self.state = self._extract_state(self.telemetry_data[0], self.scoring_data[0])
         return self.state
 
-
     
+#       mLastImpactET: min=0.0, max=844.02001953125 mam
+# mLastImpactMagnitude: min=0.0, max=22007.326171875 mam
+# mNumPenalties: min=0.0, max=1.0 nie mam, narazie nie biorę pod uwagę
+# mRaining: min=0.0, max=1.0 mam
+# mAmbientTemp: min=5.33, max=40.0 mam
+# mTrackTemp: min=9.0, max=47.35 mam
+# mDentSeverity[0]: min=0.0, max=2.0 mam
+# mDentSeverity[1]: min=0.0, max=2.0 mam
+# mDentSeverity[2]: min=0.0, max=0.0 mam
+# mDentSeverity[3]: min=0.0, max=2.0 mam
+# mDentSeverity[4]: min=0.0, max=2.0 mam
+# mDentSeverity[5]: min=0.0, max=2.0 mam
+# mDentSeverity[6]: min=0.0, max=0.0 mam
+# mDentSeverity[7]: min=0.0, max=2.0 mam
+# has_last_lap: min=0.0, max=1.0 nie mam
+# mFinishStatus: min=0.0, max=1.0 mam
+# mTotalLaps: min=0.0, max=9.0 mam
+# mSector: min=0.0, max=2.0 mam
+# mNumPitstops: min=0.0, max=2.0 nie mam
+# mInPits: min=0.0, max=1.0 mam
+# mFrontTireCompoundIndex: min=0.0, max=3.0 nie mam 
+# multiplier: min=1.0, max=3.0 nie mam
+# Feature 22: min=0.0, max=404.0758056640625
+# Feature 23: min=0.0, max=354.8138427734375
+
 
     def step(self,action):
         # possible_power_settings = [0.5,0.6,0.7,0.8,0.9,1]
+        data = [] # there will be data from LSTM model
+
         pit_entry_line = 13483.0
         pit_exit_line = 390.0
+        
+
+        sectors = {1: (0.0, 0.14),
+                   0: (0.14, 0.56),
+                   2: (0.56, 1.0)}
+        threshold = 0.97
+        
+        #Check if lap ended       
+        if data[:-2][0] > threshold and data[:-1][0] < 0.1:
+            laps += 1
+
+        #Check if race is finished
+        if data[:-1][1] >= 1.0 and data[:-1][0] > threshold:
+            finish_status = 1.0
+
+            
+        action = []# tutaj będzie akcja z modelu BC
+        lap_dist_max = 13623.9677734375
+        pit_entry_line_dist = pit_entry_line / lap_dist_max
+        pit_exit_line_dist = pit_exit_line / lap_dist_max
+        
+        if action[0] == 1:
+            if data[:-1][0] >= pit_entry_line_dist and data[:-1][0] <= pit_exit_line_dist:
+                in_pits = 1.0
+                if not self.checked_pit:
+                    self.number_of_pit_stops += 1.0
+                    self.checked_pit = True
+            else:
+                in_pits = 0.0
+                self.checked_pit = False
+                
+            
+        
+
+
         self.state = self._extract_state(self.telemetry_data[self.current_lap], self.scoring_data[self.current_lap])
         
         self.current_lap += 1
 
 
-     
+#      Sektor zmienił się na 1.0 przy dystansie -0.01213
+# Sektor zmienił się na 2.0 przy dystansie 0.13955
+# Sektor zmienił się na 0.0 przy dystansie 0.5677
+# Sektor zmienił się na 1.0 przy dystansie 0.00034
+# Sektor zmienił się na 2.0 przy dystansie 0.14061
+# Sektor zmienił się na 0.0 przy dystansie 0.56768
+# Sektor zmienił się na 1.0 przy dystansie 0.00111
