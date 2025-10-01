@@ -101,10 +101,10 @@ class RacingEnv(gym.Env):
 
         self.action_space = spaces.MultiDiscrete([
                                                 2, # Pit stop or not
-                                                2, # Confirm pit stop or not
+                                                # 2, # Confirm pit stop or not
                                                 5, # Tire change (0-4) No, soft, medium, hard, wet
                                                 2, # Repair or not (0-1)
-                                                23, # Fuel * 5l (0-22)
+                                                21, # Fuel * 0.05 (0-20)
                                                 ])
         
     def _extract_state(self, telemetry, scoring):
@@ -224,7 +224,8 @@ class RacingEnv(gym.Env):
                 in_pits = 0.0
                 self.checked_pit = False
                 
-            
+            if data[:-1][0] > 80.0:
+                tire_index = action[1] - 1.0
         
 
 
