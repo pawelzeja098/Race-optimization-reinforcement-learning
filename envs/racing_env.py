@@ -16,6 +16,34 @@ data_race_telemetry = "data/telemetry_data.json"
 class RacingEnv(gym.Env):
     def __init__(self):
         super(RacingEnv,self).__init__()
+        self.lap_dist = 0.0
+        self.race_complete_perc = 0.0
+        self.fuel_tank_capacity = -1.0
+        self.wheel1_wear = -1.0
+        self.wheel2_wear = -1.0
+        self.wheel3_wear = -1.0
+        self.wheel4_wear = -1.0
+        self.wheel1_temp = -1.0
+        self.wheel2_temp = -1.0
+        self.wheel3_temp = -1.0
+        self.wheel4_temp = -1.0
+        self.path_wetness = 0.0
+        self.last_impact_et = 0.0
+        self.last_impact_magnitude = 0.0
+        self.num_penalties = 0.0
+        self.raining = 0.0
+        self.ambient_temp = 0.0
+        self.track_temp = 0.0
+        self.end_et = 0.0
+        self.dent_severity = [0.0]*8
+        self.has_last_lap = 0.0
+        self.finish_status = 0.0
+        self.total_laps = 0.0
+        self.sector = 0.0
+        self.num_pit_stops = 0.0
+        self.in_pits = 0.0
+        self.tire_compound_index = 0.0
+       
 
         self.lap = 0
         self.usage_multiplier = 1.0
@@ -54,6 +82,7 @@ class RacingEnv(gym.Env):
         0.0,   # Raining
         0.0,   # Ambient temp
         0.0,   # Track temp
+        0.0,   # End ET
         0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  # dent severities
         0.0,   # #has last lap
         0.0,   # Finish status
@@ -84,6 +113,7 @@ class RacingEnv(gym.Env):
         1.0,   # Raining
         45.0,   # Ambient temp
         60.0,   # Track temp
+        86500.0,   # End ET
         2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0,  # dent severities
         1.0,   # #has last lap
         1.0,   # Finish status
@@ -154,11 +184,89 @@ class RacingEnv(gym.Env):
 
 
     def reset(self):
-       
+        
+        self.lap_dist = 0.0
+        self.race_complete_perc = 0.0
+        self.fuel_tank_capacity = -1.0
+        self.wheel1_wear = -1.0
+        self.wheel2_wear = -1.0
+        self.wheel3_wear = -1.0
+        self.wheel4_wear = -1.0
+        self.wheel1_temp = -1.0
+        self.wheel2_temp = -1.0
+        self.wheel3_temp = -1.0
+        self.wheel4_temp = -1.0
+        self.path_wetness = 0.0
+        self.last_impact_et = 0.0
+        self.last_impact_magnitude = 0.0
+        self.num_penalties = 0.0
+        self.raining = 0.0
+        self.ambient_temp = 0.0
+        self.track_temp = 0.0
+        self.end_et = 0.0
+        self.dent_severity = [0.0]*8
+        self.has_last_lap = 0.0
+        self.finish_status = 0.0
+        self.total_laps = 0.0
+        self.sector = 0.0
+        self.num_pit_stops = 0.0
+        self.in_pits = 0.0
+        self.tire_compound_index = -1.0
+
+        weather_conditions = generate_weather_conditions(len(self.scoring_data))
+
+        weather_start = weather_conditions[0]
+        self.raining = weather_start["mRaining"]
+        self.ambient_temp = weather_start["mAmbientTemp"]
+        self.track_temp = weather_start["mTrackTemp"]
+
+        self.end_et = 1800.0
+        
+        
         self.lap = 0
-        self.usage_multiplier = 1.0
-        self.state = self._extract_state(self.telemetry_data[0], self.scoring_data[0])
-        return self.state
+        self.usage_multiplier = 3.0
+        # self.state = self._extract_state(self.telemetry_data[0], self.scoring_data[0])
+
+        obs = np.array([
+            self.lap_dist,
+            self.race_complete_perc,
+            self.fuel_tank_capacity,
+            self.wheel1_wear,
+            self.wheel2_wear,
+            self.wheel3_wear,
+            self.wheel4_wear,
+            self.wheel1_temp,
+            self.wheel2_temp,
+            self.wheel3_temp,
+            self.wheel4_temp,
+            self.path_wetness,
+            self.last_impact_et,
+            self.last_impact_magnitude,
+            self.num_penalties,
+            self.raining,
+            self.ambient_temp,
+            self.track_temp,
+            self.end_et,
+            self.dent_severity[0],
+            self.dent_severity[1],
+            self.dent_severity[2],
+            self.dent_severity[3],
+            self.dent_severity[4],
+            self.dent_severity[5],
+            self.dent_severity[6],
+            self.dent_severity[7],
+            self.has_last_lap,
+            self.finish_status,
+            self.total_laps,
+            self.sector,
+            self.num_pit_stops,
+            self.in_pits,
+            self.tire_compound_index,
+            self.usage_multiplier
+        ], dtype=np.float32)
+
+        
+        return obs, {}
 
     
 #       mLastImpactET: min=0.0, max=844.02001953125 mam
@@ -185,14 +293,17 @@ class RacingEnv(gym.Env):
 # multiplier: min=1.0, max=3.0 nie mam
 # Feature 22: min=0.0, max=404.0758056640625
 # Feature 23: min=0.0, max=354.8138427734375
-
+#Do RL moze bym jeszcze potrzebowal całkowity race time
 
     def step(self,action):
         # possible_power_settings = [0.5,0.6,0.7,0.8,0.9,1]
-        data = [] # there will be data from LSTM model
+        data_lstm = [] # there will be data from LSTM model
 
         pit_entry_line = 13483.0
         pit_exit_line = 390.0
+
+        
+        
         
 
         sectors = {1: (0.0, 0.14),
@@ -201,12 +312,20 @@ class RacingEnv(gym.Env):
         threshold = 0.97
         
         #Check if lap ended       
-        if data[:-2][0] > threshold and data[:-1][0] < 0.1:
+        if data_lstm[:-2][0] > threshold and data_lstm[:-1][0] < 0.1:
             laps += 1
+            if laps == 1:
+                self.has_last_lap = 1.0
 
         #Check if race is finished
-        if data[:-1][1] >= 1.0 and data[:-1][0] > threshold:
+        if data_lstm[:-1][1] >= 1.0 and data_lstm[:-1][0] > threshold:
             finish_status = 1.0
+
+        #Check current sector
+        for sec, (start, end) in sectors.items():
+            if start <= data_lstm[:-1][0] <= end:
+                self.sector = float(sec)
+                break
 
             
         action = []# tutaj będzie akcja z modelu BC
@@ -214,24 +333,85 @@ class RacingEnv(gym.Env):
         pit_entry_line_dist = pit_entry_line / lap_dist_max
         pit_exit_line_dist = pit_exit_line / lap_dist_max
         
+        # Check if in pits and handle pit stop actions
         if action[0] == 1:
-            if data[:-1][0] >= pit_entry_line_dist and data[:-1][0] <= pit_exit_line_dist:
-                in_pits = 1.0
+            if data_lstm[:-1][0] >= pit_entry_line_dist and data_lstm[:-1][0] <= pit_exit_line_dist:
+                self.in_pits = 1.0
                 if not self.checked_pit:
                     self.number_of_pit_stops += 1.0
                     self.checked_pit = True
             else:
-                in_pits = 0.0
+                self.in_pits = 0.0
                 self.checked_pit = False
                 
-            if data[:-1][0] > 80.0:
-                tire_index = action[1] - 1.0
+            if data_lstm[:-1][0] > 80.0:
+                self.tire_compound_index = action[1] - 1.0
+                self.fuel_tank_capacity = action[3] * 0.05
+                if action[2] == 1:
+                    for i in range(len(self.dent_severity)):
+                        self.dent_severity[i] = 0.0
+            
         
+        impact_magnitude = random_impact_magnitude()
+        self.dent_severity = generate_dent_severity(impact_magnitude,self.dent_severity)
+                    
+
+        self.lap_dist = data_lstm[:-1][0]
+        self.lap_complete_perc = data_lstm[:-1][1]
+        self.fuel_tank_capacity = data_lstm[:-1][2]
+        self.wheel1_wear = data_lstm[:-1][3]
+        self.wheel2_wear = data_lstm[:-1][4]
+        self.wheel3_wear = data_lstm[:-1][5]
+        self.wheel4_wear = data_lstm[:-1][6]
+        self.wheel1_temp = data_lstm[:-1][7]
+        self.wheel2_temp = data_lstm[:-1][8]
+        self.wheel3_temp = data_lstm[:-1][9]
+        self.wheel4_temp = data_lstm[:-1][10]
+        self.path_wetness = data_lstm[:-1][11]
 
 
-        self.state = self._extract_state(self.telemetry_data[self.current_lap], self.scoring_data[self.current_lap])
+
+        # self.state = self._extract_state(self.telemetry_data[self.current_lap], self.scoring_data[self.current_lap])
         
         self.current_lap += 1
+
+        obs = np.array([
+            self.lap_dist,
+            self.race_complete_perc,
+            self.fuel_tank_capacity,
+            self.wheel1_wear,
+            self.wheel2_wear,
+            self.wheel3_wear,
+            self.wheel4_wear,
+            self.wheel1_temp,
+            self.wheel2_temp,
+            self.wheel3_temp,
+            self.wheel4_temp,
+            self.path_wetness,
+            self.last_impact_et,
+            self.last_impact_magnitude,
+            self.num_penalties,
+            self.raining,
+            self.ambient_temp,
+            self.track_temp,
+            self.end_et,
+            self.dent_severity[0],
+            self.dent_severity[1],
+            self.dent_severity[2],
+            self.dent_severity[3],
+            self.dent_severity[4],
+            self.dent_severity[5],
+            self.dent_severity[6],
+            self.dent_severity[7],
+            self.has_last_lap,
+            self.finish_status,
+            self.total_laps,
+            self.sector,
+            self.num_pit_stops,
+            self.in_pits,
+            self.tire_compound_index,
+            self.usage_multiplier
+        ], dtype=np.float32)
 
 
 #      Sektor zmienił się na 1.0 przy dystansie -0.01213

@@ -85,25 +85,118 @@ def compute_gae(rewards, values, dones, gamma=0.995, lam=0.95):
     returns = [adv + val for adv, val in zip(advantages, values[:-1])]
     return advantages, returns
 
+class RolloutBuffer:
+    """
+    Buffer to store trajectories for PPO updates. One race worth of data.
+    """
+    def __init__(self):
+        self.states = []
+        self.actions = []
+        self.log_probs = []
+        self.rewards = []
+        self.values = []
+        self.dones = []
+
+    def clear(self):
+        self.__init__()
+
+def ppo_update(model, optimizer, buffer, clip_eps=0.2):
+    """
+    Proximal Policy Optimization (PPO) update step.
+    Clipping the policy update to avoid large updates.
+
+    """
+    states = torch.tensor(buffer.states, dtype=torch.float32)
+    old_log_probs = torch.stack(buffer.log_probs)
+    actions = buffer.actions
+    rewards = buffer.rewards
+    values = torch.stack(buffer.values).squeeze()
+    dones = buffer.dones
+
+    advantages, returns = compute_gae(rewards, values.tolist(), dones)
+    advantages = torch.tensor(advantages, dtype=torch.float32)
+    returns = torch.tensor(returns, dtype=torch.float32)
+
+    # Forward pass
+    action_probs, values_new = model(states)
+
+    # Oblicz log_probs dla MultiDiscrete
+    log_probs_new = []
+    for i, probs in enumerate(action_probs):
+        dist = torch.distributions.Categorical(probs)
+        acts = torch.tensor([a[i] for a in actions])
+        log_probs_new.append(dist.log_prob(acts))
+    log_probs_new = torch.stack(log_probs_new).sum(dim=0)
+
+    # PPO ratio
+    ratio = torch.exp(log_probs_new - old_log_probs.detach())
+    surr1 = ratio * advantages
+    surr2 = torch.clamp(ratio, 1-clip_eps, 1+clip_eps) * advantages
+
+    actor_loss = -torch.min(surr1, surr2).mean()  # polityka
+    critic_loss = F.mse_loss(values_new.squeeze(), returns)  # Critic
+    loss = actor_loss + 0.5 * critic_loss
+
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
 env = RacingEnv()
+state_dim = env.observation_space.shape[0]
+model = ActorCritic(state_dim, env.action_space)
+optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
+buffer = RolloutBuffer()
 
-obs_dim = env.observation_space.shape[0]  # lub inny rozmiar zgodny z obserwacją
-action_space = env.action_space  # Twoje rozmiary akcji
+num_epochs = 1000
+steps_per_epoch = 200
 
-model = PolicyNetwork(obs_dim,action_space)
-obs = env.reset()
-done = False
-env.step(action_space)
-obs = env.state
-while not done:
-    obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0)  # dodaj batch
+for epoch in range(num_epochs):
+    obs = env.reset()
+    for step in range(steps_per_epoch):
+        actions, log_prob, value = select_action(model, obs)
+        next_obs, reward, done, _ = env.step(actions)
 
-    # Weź rozkłady prawdopodobieństw
-    action_probs = model(obs_tensor)
+        # zapis danych do buffer
+        buffer.states.append(obs)
+        buffer.actions.append(actions)
+        buffer.log_probs.append(log_prob)
+        buffer.values.append(value)
+        buffer.rewards.append(torch.tensor(reward, dtype=torch.float32))
+        buffer.dones.append(done)
 
-    # Wylosuj akcje z rozkładów
-    actions = [torch.multinomial(probs, num_samples=1).item() for probs in action_probs]
+        obs = next_obs
+        if done:
+            obs = env.reset()
 
-    # Zrealizuj akcję w środowisku
-    obs, reward, done, info = env.step(actions)
+    # PPO update po rollout
+    ppo_update(model, optimizer, buffer)
+    buffer.clear()
+
+    if epoch % 10 == 0:
+        total_reward = sum([r.item() for r in buffer.rewards])
+        print(f"Epoch {epoch}, total reward {total_reward}")
+
+
+
+# env = RacingEnv()
+
+# obs_dim = env.observation_space.shape[0]  # lub inny rozmiar zgodny z obserwacją
+# action_space = env.action_space  # Twoje rozmiary akcji
+
+# model = PolicyNetwork(obs_dim,action_space)
+# obs = env.reset()
+# done = False
+# env.step(action_space)
+# obs = env.state
+# while not done:
+#     obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0)  # dodaj batch
+
+#     # Weź rozkłady prawdopodobieństw
+#     action_probs = model(obs_tensor)
+
+#     # Wylosuj akcje z rozkładów
+#     actions = [torch.multinomial(probs, num_samples=1).item() for probs in action_probs]
+
+#     # Zrealizuj akcję w środowisku
+#     obs, reward, done, info = env.step(actions)
 

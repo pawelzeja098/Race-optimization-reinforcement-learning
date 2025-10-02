@@ -182,6 +182,7 @@ def extract_state(telem_file_raw, scoring_file_raw):
                 scoring["mRaining"],
                 round(scoring["mAmbientTemp"], 2),
                 round(scoring["mTrackTemp"], 2),
+                round(endET,5),
 
                 #dane dyskretne pomocniczne
                 
