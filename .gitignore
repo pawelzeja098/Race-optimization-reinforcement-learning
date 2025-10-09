@@ -1,5 +1,5 @@
 data/weather_data_real/26_Weather_Race_Hour 24.csv
-data
+
 envs/__pycache__/generate_actions_BC.cpython-312.pyc
 envs/__pycache__/generate_state_BC.cpython-312.pyc
 ai/__pycache__/__init__.cpython-312.pyc
