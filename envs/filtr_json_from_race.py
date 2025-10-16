@@ -31,6 +31,7 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
     scoring_records_len = 0
     data_before_start = 0
     start_flag = False
+    # data_saved_scoring = 0
 
     for entry in raw_data_scoring:
         # for vehicle in raw_data_scoring.get("mVehicles", []):
@@ -39,7 +40,10 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
             data_before_start += 1
             start_flag = True
             continue
-
+        # if entry.get("mVehicles")["mFinishStatus"] == 1:
+        #     break
+        
+        # data_saved_scoring += 1
         #     if vehicle.get("mIsPlayer"):
         vehicle = entry.get("mVehicles")
 
@@ -71,45 +75,42 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
     
     telemetry_records_len = 0
     count_before_start = 0
+    data_saved_telemetry = 0
+    curr_tel = 0
     for entry in raw_data_telemetry:
+        changed_tires_flag = False
+        refueled_flag = False
+
         if count_before_start < data_before_start:
             count_before_start += 1
             continue
         if telemetry_records_len >= scoring_records_len:
             break
+        # if data_saved_telemetry >= data_saved_scoring:
+        #     break
+        # data_saved_telemetry += 1
         wanted_keys = ["mFuel", "mFuelCapacity","mWheel","mDentSeverity","mFrontTireCompoundIndex","mCurrentSector","mLapNumber","mLastImpactET","mLastImpactMagnitude","multiplier"]
+
+        if entry["mWheel"][0]["mWear"] > raw_data_telemetry[curr_tel-1]["mWheel"][0]["mWear"]:
+            vehicle = raw_data_scoring[curr_tel].get("mVehicles")
+            if vehicle[0]["mInPits"] is True:
+                changed_tires_flag = True
+            # changed_tires_flag = True
+        if entry["mFuel"] > raw_data_telemetry[curr_tel-1]["mFuel"]:
+            vehicle = raw_data_scoring[curr_tel].get("mVehicles")
+            if vehicle[0]["mInPits"] is True:
+                refueled_flag = True
+                print(f"Refueled at ET {vehicle[0]['mTotalLaps']}, {telemetry_records_len} record")
+            # changed_tires_flag = True
 
         avg_temp = 0
         subset = {k: entry.get(k) for k in wanted_keys}
-        # for wheel in subset["mWheel"]:
-        #     for temp in wheel.get("mTemperature", 0):
-        #         avg_temp += temp
-        #     avg_temp /= len(wheel.get("mTemperature", []))
-
-       #Mean values for wheels
-
-        # wheels = entry.get("mWheel", [])
-        # avg_wear = 0
-        # avg_brake_temp = 0
-        # avg_temp = 0
-        # for wheel in wheels:
-        #     avg_wear += wheel.get("mWear", 0)
-        #     # avg_brake_temp += wheel.get("mBrakeTemp", 0)
-        #     # avg_temp += wheel.get("mTemperature", 0)
-        #     for temp in wheel.get("mTemperature", 0):
-        #         avg_temp += temp
-        #     avg_temp /= len(wheel.get("mTemperature", []))
-        # avg_wear /= len(wheels)
-        # # avg_brake_temp /= len(wheels)
-        # avg_temp /= len(wheels)
-
-        # subset["mWheel"] = {
-        #     "mWear": avg_wear,
-        #     "mBrakeTemp": avg_brake_temp,
-        #     "mTemperature": avg_temp,
-        # }
+        subset["changed_tires_flag"] = int(changed_tires_flag)
+        subset["refueled_flag"] = int(refueled_flag)
+      
         filtered_data_telemetry.append(subset)
         telemetry_records_len += 1
+        curr_tel += 1
         # print(json.dumps(subset, indent=2))
     
 
@@ -204,6 +205,8 @@ def extract_state(telem_file_raw, scoring_file_raw):
                 int(scoring["mInPits"]),
                 telemetry["mFrontTireCompoundIndex"],
                 telemetry["multiplier"],
+                telemetry["changed_tires_flag"],
+                telemetry["refueled_flag"],
 
                 #ciągłe nie używane do trenowania
                 last_lap,
