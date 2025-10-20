@@ -152,7 +152,10 @@ steps_per_epoch = 200
 
 for epoch in range(num_epochs):
     obs = env.reset()
+    actions,log_prob,value = select_action(model,obs)
+    env.start_configuration(actions)
     for step in range(steps_per_epoch):
+        #TO DO: loop until race ends - done signal from env
         actions, log_prob, value = select_action(model, obs)
         next_obs, reward, done, _ = env.step(actions)
 
@@ -170,11 +173,13 @@ for epoch in range(num_epochs):
 
     # PPO update po rollout
     ppo_update(model, optimizer, buffer)
-    buffer.clear()
+    
 
     if epoch % 10 == 0:
         total_reward = sum([r.item() for r in buffer.rewards])
         print(f"Epoch {epoch}, total reward {total_reward}")
+    
+    buffer.clear()
 
 
 
