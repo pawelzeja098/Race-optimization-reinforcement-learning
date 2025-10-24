@@ -26,7 +26,7 @@ def random_impact_magnitude(prob_impact=0.01):
 def generate_dent_severity(impact_magnitude,dent_severity_current):
     # Przykładowe progi i losowanie uszkodzenia
     if impact_magnitude == 0.0:
-        return 0.0
+        return dent_severity_current
     
     if impact_magnitude < 2000:
         elem_damage_prob = 0.1

@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 if __name__ == "__main__":
-    # usage_multiplier = 2.0  # Ustawienia wyścigu
+    # usage_multiplier = 3.0  # Ustawienia wyścigu
     # collect_telemetry(usage_multiplier)
     
 
@@ -27,7 +27,7 @@ if __name__ == "__main__":
 
  
     
-    # load_from_db()
+    load_from_db()
 
     # filtr_json_files()
     

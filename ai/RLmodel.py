@@ -1,3 +1,4 @@
+import os
 import sys
 sys.path.append(r'E:\Programowanie\Reinforcement-learning-race-simulation')
 
@@ -8,6 +9,7 @@ import torch.nn.functional as F
 import random
 import numpy as np
 from collections import deque
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from envs.racing_env import RacingEnv
 
 class  ActorCritic(nn.Module):
@@ -45,18 +47,19 @@ class  ActorCritic(nn.Module):
         return action_probs, state_value
 
 def select_action(model,state):
-    state = torch.tensor(state, dtype=torch.float32).unsqueeze(0) #add state batch dimension
-    action_probs, state_value = model(state) # get action probabilities and state value
+    state = torch.tensor(state, dtype=torch.float32).unsqueeze(0)  # [1, obs_dim]
+    action_probs_list, state_value = model(state)  # lista tensorów [1, num_options]
 
     actions = []
     log_probs = []
 
-    for probs in action_probs:
+    for probs in action_probs_list:
+        probs = probs.squeeze(0)  # usuń batch dimension -> [num_options]
         action = torch.multinomial(probs, num_samples=1).item()
         actions.append(action)
         log_probs.append(torch.log(probs[action]))
 
-    return actions, action_probs, state_value
+    return actions, log_probs, state_value
 
 def compute_gae(rewards, values, dones, gamma=0.995, lam=0.95):
     """
@@ -152,12 +155,12 @@ steps_per_epoch = 200
 
 for epoch in range(num_epochs):
     obs = env.reset()
-    actions,log_prob,value = select_action(model,obs)
-    env.start_configuration(actions)
+    # actions,log_prob,value = select_action(model,obs)
+    # env.start_configuration(actions)
     for step in range(steps_per_epoch):
         #TO DO: loop until race ends - done signal from env
         actions, log_prob, value = select_action(model, obs)
-        next_obs, reward, done, _ = env.step(actions)
+        next_obs, reward, done, _ = env.step(actions,obs)
 
         # zapis danych do buffer
         buffer.states.append(obs)

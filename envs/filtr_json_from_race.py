@@ -131,8 +131,12 @@ def extract_state(telem_file_raw, scoring_file_raw):
         endET = -1
 
         for i in range(len(telemetry_all)):
+            
             telemetry = telemetry_all[i]
             scoring = scoring_all[i]
+            #SPRAWDZIC CZY NA POCZATKU JEST 0
+            if i == 0:
+                print(scoring["mCurrentET"])
 
             if telemetry["mLastImpactET"] <= 0:
                 telemetry["mLastImpactET"] = 0.0

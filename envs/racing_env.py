@@ -1,16 +1,20 @@
+import os
+import sys
+import joblib
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 import json
 
 matplotlib.use('TkAgg')
-
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import gymnasium as gym
 from gymnasium import spaces
-from weather_generator import generate_weather_conditions
-from impact_generator import random_impact_magnitude, generate_dent_severity
+from envs.weather_generator import generate_weather_conditions
+from envs.impact_generator import random_impact_magnitude, generate_dent_severity
 from ai.LSTMmodel import LSTMStatePredictor, generate_predictions
 import torch
+from collections import deque
 
 data_race_scoring = "data/scoring_data.json"
 data_race_telemetry = "data/telemetry_data.json"
@@ -49,12 +53,19 @@ class RacingEnv(gym.Env):
         self.refueled_flag = 0.0
         self.usage_multiplier = 1.0
         
-        self.lap = 0
+        self.laps = 0
         self.checked_pit = False
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.state = None
+        self.scaler_X = joblib.load("models/scaler_X.pkl")
+        self.scaler_Y = joblib.load("models/scaler_Y.pkl")
+
+        self.LSTM_model = LSTMStatePredictor(input_size=37, hidden_size=128, output_size=12, n_steps_ahead=5, scaler_X=self.scaler_X, scaler_Y=self.scaler_Y).to(device)
+        self.LSTM_model.load_state_dict(torch.load("models/lstm_model.pth", map_location=device))
+        self.LSTM_model.eval()
+        self.curr_window = deque(maxlen=30)
+
         
-        self.LSTM_model = LSTMStatePredictor(input_size=37, hidden_size=128, output_size=12, n_steps_ahead=5).to(device)
 
         # with open(data_race_scoring, "r") as file:
         #     self.scoring_data = json.load(file)
@@ -103,7 +114,7 @@ class RacingEnv(gym.Env):
 
     ], dtype=np.float32),
     high=np.array([
-        1,2,     # Lap Dist
+        1.2,     # Lap Dist
         2.0,     # Race complete %
         1.1,     # Tank capacity
         1.0,     # Wheel wear
@@ -194,18 +205,19 @@ class RacingEnv(gym.Env):
 
 
     def reset(self):
+        self.laps = 0
         
         self.lap_dist = 0.0
         self.race_complete_perc = 0.0
-        self.fuel_tank_capacity = -1.0
-        self.wheel1_wear = -1.0
-        self.wheel2_wear = -1.0
-        self.wheel3_wear = -1.0
-        self.wheel4_wear = -1.0
-        self.wheel1_temp = -1.0
-        self.wheel2_temp = -1.0
-        self.wheel3_temp = -1.0
-        self.wheel4_temp = -1.0
+        self.fuel_tank_capacity = 1.0
+        self.wheel1_wear = 1.0
+        self.wheel2_wear = 1.0
+        self.wheel3_wear = 1.0
+        self.wheel4_wear = 1.0
+        self.wheel1_temp = 340.0
+        self.wheel2_temp = 340.0
+        self.wheel3_temp = 340.0
+        self.wheel4_temp = 340.0
         self.path_wetness = 0.0
         self.last_impact_et = 0.0
         self.last_impact_magnitude = 0.0
@@ -221,11 +233,11 @@ class RacingEnv(gym.Env):
         self.sector = 0.0
         self.num_pit_stops = 0.0
         self.in_pits = 1.0
-        self.tire_compound_index = -1.0
+        self.tire_compound_index = 0.0
         self.changed_tires_flag = 0.0
         self.refueled_flag = 0.0
 
-        weather_conditions = generate_weather_conditions(len(self.scoring_data))
+        weather_conditions = generate_weather_conditions(1)
 
         weather_start = weather_conditions[0]
         self.raining = weather_start["mRaining"]
@@ -279,8 +291,10 @@ class RacingEnv(gym.Env):
             self.refueled_flag
         ], dtype=np.float32)
 
+        self.curr_window.append(self.state)
 
-        return self.state, {}
+
+        return self.state
     
     def start_configuration(self,action):
         self.tire_compound_index = action[1] - 1.0
@@ -349,6 +363,8 @@ class RacingEnv(gym.Env):
         while True:
             if (prev_sector == 2.0 and self.sector == 0.0) or (prev_sector == 1.0 and self.sector == 2.0) or self.finish_status == 1.0:
                 reward = self.compute_reward(last_step)
+
+                
                 
                 break
             
@@ -357,7 +373,7 @@ class RacingEnv(gym.Env):
             done = False
             data_lstm = [] # there will be data from LSTM model
 
-            data_lstm = generate_predictions(self.LSTM_model, self.state)
+            data_lstm = generate_predictions(self.LSTM_model, self.curr_window)
 
 
             pit_entry_line = 13483.0
@@ -371,15 +387,17 @@ class RacingEnv(gym.Env):
                     0: (0.14, 0.56),
                     2: (0.56, 1.0)}
             threshold = 0.97
+            print("LAP DIST: ",data_lstm[-1][0])
+            print("Race DIST: ",data_lstm[-1][1])
             
             #Check if lap ended       
-            if data_lstm[:-2][0] > threshold and data_lstm[:-1][0] < 0.1:
-                laps += 1
-                if laps == 1:
+            if (data_lstm[4][0] > threshold).any() and (data_lstm[3][0] < 0.1).any():
+                self.laps += 1
+                if self.laps == 1:
                     self.has_last_lap = 1.0
 
             #Check if race is finished
-            if data_lstm[:-1][1] >= 1.0 and data_lstm[:-1][0] > threshold:
+            if data_lstm[-1][1] >= 1.0 and data_lstm[:-1][0] > threshold:
                 finish_status = 1.0
                 if finish_status == 1.0:
                     # reward = 1000.0
@@ -389,7 +407,7 @@ class RacingEnv(gym.Env):
             #Check current sector
             prev_sector = self.sector
             for sec, (start, end) in sectors.items():
-                if start <= data_lstm[:-1][0] <= end:
+                if start <= data_lstm[-1][0] <= end:
                     self.sector = float(sec)
                     if self.sector == 2:
                         reward = self.compute_reward(last_step)
@@ -403,7 +421,7 @@ class RacingEnv(gym.Env):
             
             # Check if in pits and handle pit stop actions
             if action[0] == 1:
-                if data_lstm[:-1][0] >= pit_entry_line_dist and data_lstm[:-1][0] <= pit_exit_line_dist:
+                if pit_entry_line_dist <= data_lstm[-1][0] <= 1.01 and 0 <= data_lstm[-1][0] <= pit_exit_line_dist and self.laps != 0:
                     self.in_pits = 1.0
                     if not self.checked_pit:
                         self.number_of_pit_stops += 1.0
@@ -412,7 +430,7 @@ class RacingEnv(gym.Env):
                     self.in_pits = 0.0
                     self.checked_pit = False
                     
-                if data_lstm[:-1][0] > 80.0:
+                if data_lstm[-1][0] > 80.0:
                     self.tire_compound_index = action[1] - 1.0
                     self.changed_tires_flag = 1.0
                     self.fuel_tank_capacity = action[3] * 0.05
@@ -433,26 +451,26 @@ class RacingEnv(gym.Env):
             self.track_temp = weather_start["mTrackTemp"]
                             
 
-            self.lap_dist = data_lstm[:-1][0]
-            self.lap_complete_perc = data_lstm[:-1][1]
-            self.fuel_tank_capacity = data_lstm[:-1][2]
-            self.wheel1_wear = data_lstm[:-1][3]
-            self.wheel2_wear = data_lstm[:-1][4]
-            self.wheel3_wear = data_lstm[:-1][5]
-            self.wheel4_wear = data_lstm[:-1][6]
-            self.wheel1_temp = data_lstm[:-1][7]
-            self.wheel2_temp = data_lstm[:-1][8]
-            self.wheel3_temp = data_lstm[:-1][9]
-            self.wheel4_temp = data_lstm[:-1][10]
-            self.path_wetness = data_lstm[:-1][11]
+            self.lap_dist = data_lstm[-1][0]
+            self.lap_complete_perc = data_lstm[-1][1]
+            self.fuel_tank_capacity = data_lstm[-1][2]
+            self.wheel1_wear = data_lstm[-1][3]
+            self.wheel2_wear = data_lstm[-1][4]
+            self.wheel3_wear = data_lstm[-1][5]
+            self.wheel4_wear = data_lstm[-1][6]
+            self.wheel1_temp = data_lstm[-1][7]
+            self.wheel2_temp = data_lstm[-1][8]
+            self.wheel3_temp = data_lstm[-1][9]
+            self.wheel4_temp = data_lstm[-1][10]
+            self.path_wetness = data_lstm[-1][11]
 
             
 
             # self.state = self._extract_state(self.telemetry_data[self.current_lap], self.scoring_data[self.current_lap])
             
-            self.current_lap += 1
+            
 
-            self.obs = np.array([
+            self.state = np.array([
                 self.lap_dist,
                 self.race_complete_perc,
                 self.fuel_tank_capacity,
@@ -491,6 +509,8 @@ class RacingEnv(gym.Env):
                 self.changed_tires_flag,
                 self.refueled_flag
             ], dtype=np.float32)
+
+            self.curr_window.append(self.state)
 
             
 
