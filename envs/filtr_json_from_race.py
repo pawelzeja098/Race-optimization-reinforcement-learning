@@ -32,14 +32,22 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
     data_before_start = 0
     start_flag = False
     # data_saved_scoring = 0
+    start_lights_flag = False
 
     for entry in raw_data_scoring:
         # for vehicle in raw_data_scoring.get("mVehicles", []):
         start = entry["mStartLight"]
-        if start == 0 and not start_flag:
+        
+        if start == 6:
+            start_lights_flag = True
+        vehicle = entry.get("mVehicles")
+        time_start = vehicle[0]["mTimeIntoLap"]
+        if (time_start < 0 or not start_lights_flag) and not start_flag:
             data_before_start += 1
-            start_flag = True
+            
             continue
+        start_lights_flag = False
+        start_flag = True
         # if entry.get("mVehicles")["mFinishStatus"] == 1:
         #     break
         
@@ -100,7 +108,7 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
             vehicle = raw_data_scoring[curr_tel].get("mVehicles")
             if vehicle[0]["mInPits"] is True:
                 refueled_flag = True
-                print(f"Refueled at ET {vehicle[0]['mTotalLaps']}, {telemetry_records_len} record")
+                # print(f"Refueled at ET {vehicle[0]['mTotalLaps']}, {telemetry_records_len} record")
             # changed_tires_flag = True
 
         avg_temp = 0
@@ -123,21 +131,34 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
 
 def extract_state(telem_file_raw, scoring_file_raw):
         filtered_data_telemetry, filtered_data_scoring = filtr_json_files(telem_file_raw,scoring_file_raw)
-        
+        zjebany_wyscig = False
         data_state = []
         
         scoring_all = filtered_data_scoring
         telemetry_all = filtered_data_telemetry
         endET = -1
-
+        print("Kolejny wyscig")
         for i in range(len(telemetry_all)):
             
             telemetry = telemetry_all[i]
             scoring = scoring_all[i]
             #SPRAWDZIC CZY NA POCZATKU JEST 0
-            if i == 0:
-                print(scoring["mCurrentET"])
+            if scoring["mLapDist"] <= 0.0:
+                
+                zjebany_wyscig = True
 
+            if i < 50 and zjebany_wyscig:
+                print("Kolejne okrazenie")
+                # for (ks, vs), (kt, vt) in zip(scoring.items(), telemetry.items()):
+                
+                #     print("scoring:", ks, vs)
+                #     print("telemetry:", kt, vt)
+                print(scoring["mTotalLapDistance"])
+                print(scoring["mLapDist"])
+
+                print("\n")
+                print("-----")
+                
             if telemetry["mLastImpactET"] <= 0:
                 telemetry["mLastImpactET"] = 0.0
             else:
@@ -231,6 +252,9 @@ def extract_state(telem_file_raw, scoring_file_raw):
 def save_to_db(telem_file_raw, scoring_file_raw):
     # przykładowe stany i akcje
     states = extract_state(telem_file_raw, scoring_file_raw)
+
+    print(len(states))
+
 
     # zamieniamy listy na JSON
     states_json = json.dumps(states)

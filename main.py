@@ -27,7 +27,7 @@ if __name__ == "__main__":
 
  
     
-    load_from_db()
+    # load_from_db()
 
     # filtr_json_files()
     

@@ -208,7 +208,7 @@ class RacingEnv(gym.Env):
         self.laps = 0
         
         self.lap_dist = 0.0
-        self.race_complete_perc = 0.0
+        # self.race_complete_perc = 0.0
         self.fuel_tank_capacity = 1.0
         self.wheel1_wear = 1.0
         self.wheel2_wear = 1.0
@@ -245,6 +245,7 @@ class RacingEnv(gym.Env):
         self.track_temp = weather_start["mTrackTemp"]
 
         self.end_et = 1800.0
+        self.race_complete_perc = 126.0 / self.end_et #Approxed delta for driving to start line(126s)
         
         
         self.lap = 0
