@@ -13,12 +13,12 @@ The goal of this project is to:
 ## ⚙️ Current Features
 - Data ingestion from Le Mans Ultimate telemetry logs.
 - Preprocessing and scaling of continuous race data.
-- **Neural network model (MLP)** for predicting next race states and generating synthetic race runs.
+- **Long short-term memory(LSTM) model** for predicting next race states and generating synthetic race runs.
+- Extend the simulator with probabilistic events (e.g., car damage from collisions).
 
 ## 🚧 Next Steps
-- Extend the simulator with probabilistic events (e.g., car damage from collisions).
 - Integrate a **Reinforcement Learning environment** to allow agents to optimize strategies (pit stops, tire/fuel management).
-- Experiment with more advanced architectures (e.g., **LSTM/RNN** for sequential dependencies).
+- Test/fine-tune RL model directly with LMU
 
 ## 🛠️ Technologies
 - **Python**, **PyTorch**, **Scikit-learn** – neural network training and inference  
