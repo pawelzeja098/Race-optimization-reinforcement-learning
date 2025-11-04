@@ -151,37 +151,50 @@ optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
 buffer = RolloutBuffer()
 
 num_epochs = 1000
-steps_per_epoch = 200
+# steps_per_epoch = 200 # Ta zmienna nie jest używana w tej logice
 
 for epoch in range(num_epochs):
+    
     obs = env.reset()
-    # actions,log_prob,value = select_action(model,obs)
-    # env.start_configuration(actions)
-    for step in range(steps_per_epoch):
-        #TO DO: loop until race ends - done signal from env
+    done = False  # <-- POPRAWKA 1: Zainicjuj 'done'
+    
+    while not done:
+        
+        # Wybierz akcję na podstawie bieżącej obserwacji
         actions, log_prob, value = select_action(model, obs)
-        next_obs, reward, done, _ = env.step(actions,obs)
+        
+        # Wykonaj akcję. 
+        # Zmieniono env.step(actions, obs) na env.step(actions)
+        # Środowisko samo śledzi swój stan (obs), nie trzeba go podawać.
+        next_obs, reward, done, _ = env.step(actions, obs)
 
-        # zapis danych do buffer
-        buffer.states.append(obs)
+        # --- POPRAWKA 2: Zapisuj 'obs' (stan s_t) ---
+        buffer.states.append(obs) 
+        # ---------------------------------------------
+
         buffer.actions.append(actions)
         buffer.log_probs.append(log_prob)
         buffer.values.append(value)
         buffer.rewards.append(torch.tensor(reward, dtype=torch.float32))
         buffer.dones.append(done)
 
+        # Zaktualizuj stan na następną iterację
         obs = next_obs
-        if done:
-            obs = env.reset()
+        
+        # --- POPRAWKA 3: Usunięto blok 'if done: reset()' ---
+        # Pętla 'while' sama się zakończy, a reset nastąpi
+        # na początku następnej epoki.
 
-    # PPO update po rollout
+    # Koniec epizodu (rolloutu)
+    
+    # PPO update po zebraniu danych z całego epizodu
     ppo_update(model, optimizer, buffer)
     
-
     if epoch % 10 == 0:
         total_reward = sum([r.item() for r in buffer.rewards])
         print(f"Epoch {epoch}, total reward {total_reward}")
     
+    # Wyczyść bufor po aktualizacji, gotowy na nową epokę
     buffer.clear()
 
 

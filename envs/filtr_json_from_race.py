@@ -3,7 +3,7 @@
 import numpy as np
 import sqlite3
 import json
-import numpy as np
+
 # from generate_actions_BC import generate_actions_BC
 # from generate_state_BC import extract_state
 
@@ -136,6 +136,7 @@ def extract_state(telem_file_raw, scoring_file_raw):
         
         scoring_all = filtered_data_scoring
         telemetry_all = filtered_data_telemetry
+        len_data = len(telemetry_all)
         endET = -1
         print("Kolejny wyscig")
         for i in range(len(telemetry_all)):
@@ -174,21 +175,29 @@ def extract_state(telem_file_raw, scoring_file_raw):
                 last_lap = 0  # placeholder
                 best_lap = 0
             
+            if telemetry["mLastImpactMagnitude"] == telemetry_all[i-1]["mLastImpactMagnitude"]:
+                telemetry["mLastImpactMagnitude"] = 0.0
+            
             if scoring["mEndET"] < 0:
                 endET = scoring_all[i+4]["mEndET"]
 
             else:
-                endET = scoring["mEndET"]    
-                
+                endET = scoring["mEndET"]
 
+            lap_dist_sin = np.sin(2 * np.pi * (scoring["mLapDist"] / scoring["mTotalLapDistance"]))
+
+            lap_dist_cos = np.cos(2 * np.pi * (scoring["mLapDist"] / scoring["mTotalLapDistance"]))
+            curr_step = i/len_data
             data_state_per = [
                 #dane do przewidzenia
                 #dane ciągłe
                 
                 # scoring["mCurrLapTime"],
                 
-                round(scoring["mLapDist"]/scoring["mTotalLapDistance"],5),
-                round(scoring["mCurrentET"]/endET,5),
+                # round(scoring["mLapDist"]/scoring["mTotalLapDistance"],5),
+                round(lap_dist_sin,5),
+                round(lap_dist_cos,5),
+                # round(scoring["mCurrentET"]/endET,5),
 
                 round(telemetry["mFuel"]/telemetry["mFuelCapacity"],5),
                 round(telemetry['mWheel'][0]['mWear'], 5),  # Average wear across all four tires
@@ -202,6 +211,8 @@ def extract_state(telem_file_raw, scoring_file_raw):
                 scoring["mAvgPathWetness"],
 
                 #dane pomocnicze ciągłe
+                curr_step,
+
                 telemetry["mLastImpactET"],
                 telemetry["mLastImpactMagnitude"],
                 scoring["mNumPenalties"],

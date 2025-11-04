@@ -12,10 +12,10 @@ import numpy as np
 # mDentSeverity[6]: min=0.0, max=0.0
 # mDentSeverity[7]: min=0.0, max=2.0
 
-def random_impact_magnitude(prob_impact=0.01):
+def random_impact_magnitude(prob_impact = 0.49):
 
     if np.random.rand() > prob_impact:
-        return 0.0  # brak uderzenia
+        return 0.0
     probabilities = np.load('E:/pracadyp/Race-optimization-reinforcement-learning/data/probabilities_impact/probabilities.npy')
     bin_edges = np.load('E:/pracadyp/Race-optimization-reinforcement-learning/data/probabilities_impact/bin_edges.npy')
 
@@ -64,10 +64,12 @@ def generate_dent_severity(impact_magnitude,dent_severity_current):
     for i in range(8):
         if i == 2 or i == 6:
             continue  # te elementy się nie uszkadzają
-        if np.random.rand() < elem_damage_prob:  # 50% szansy na uszkodzenie każdego elementu
-            return 0.0
+        if np.random.rand() < elem_damage_prob:  # szansa na uszkodzenie tego elementu
+            continue
         else:
             if dent_severity_current[i] < 2.0:
                 dent_severity_current[i] += np.random.choice(damage_levels, p=damage_probs)
                 dent_severity_current[i] = min(dent_severity_current[i], 2.0)  # max 2.0
     return dent_severity_current
+
+random_impact_magnitude()

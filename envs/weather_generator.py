@@ -26,14 +26,14 @@ def generate_weather_conditions(num_conditions,mRaining_start=0.0,mAmbientTemp_s
             # Jeśli pada, powolna zmiana intensywności
             mRaining = min(1, max(0, mRaining + uniform(-0.01, 0.01)))
             # Szansa na koniec deszczu tylko jeśli bardzo słaby
-            if mRaining < 0.05 and random() < 0.05:
+            if random() < 0.05: #mRaining < 0.05 
                 mRaining = 0.0
 
         # Temperatura: powolne zmiany, ograniczone zakresy
         mAmbientTemp += uniform(-0.2, 0.2)
         mAmbientTemp = min(40, max(5.33, mAmbientTemp))
         # Tor reaguje wolniej na zmiany otoczenia
-        mTrackTemp += uniform(-0.1, 0.1) + 0.5 * (mAmbientTemp - mTrackTemp)
+        mTrackTemp += uniform(-0.1, 0.1) + 0.5 * (abs(mAmbientTemp - mTrackTemp))
         mTrackTemp = min(47.35, max(9, mTrackTemp))
 
     return weather_conditions

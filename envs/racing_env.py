@@ -22,6 +22,7 @@ data_race_telemetry = "data/telemetry_data.json"
 class RacingEnv(gym.Env):
     def __init__(self):
         super(RacingEnv,self).__init__()
+        self.history = []
         self.lap_dist = 0.0
         self.race_complete_perc = 0.0
         self.fuel_tank_capacity = -1.0
@@ -52,18 +53,21 @@ class RacingEnv(gym.Env):
         self.changed_tires_flag = 0.0
         self.refueled_flag = 0.0
         self.usage_multiplier = 1.0
+        self.prev_et = 0.0
+        self.curr_step = 0
         
         self.laps = 0
         self.checked_pit = False
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.state = None
-        self.scaler_X = joblib.load("models/scaler_X.pkl")
-        self.scaler_Y = joblib.load("models/scaler_Y.pkl")
+        self.scaler_X = joblib.load("models/scaler2_X.pkl")
+        self.scaler_Y = joblib.load("models/scaler2_Y.pkl")
+        self.h_c = None
 
-        self.LSTM_model = LSTMStatePredictor(input_size=37, hidden_size=128, output_size=12, n_steps_ahead=5, scaler_X=self.scaler_X, scaler_Y=self.scaler_Y).to(device)
-        self.LSTM_model.load_state_dict(torch.load("models/lstm_model.pth", map_location=device))
+        self.LSTM_model = LSTMStatePredictor(input_size=38, hidden_size=256, output_size=13, num_layers=1).to(device)
+        self.LSTM_model.load_state_dict(torch.load("models/lstm2_model.pth", map_location=device))
         self.LSTM_model.eval()
-        self.curr_window = deque(maxlen=30)
+        # self.curr_window = deque(maxlen=30)
 
         
 
@@ -232,7 +236,7 @@ class RacingEnv(gym.Env):
         self.total_laps = 0.0
         self.sector = 0.0
         self.num_pit_stops = 0.0
-        self.in_pits = 1.0
+        self.in_pits = 0.0
         self.tire_compound_index = 0.0
         self.changed_tires_flag = 0.0
         self.refueled_flag = 0.0
@@ -244,16 +248,19 @@ class RacingEnv(gym.Env):
         self.ambient_temp = weather_start["mAmbientTemp"]
         self.track_temp = weather_start["mTrackTemp"]
 
-        self.end_et = 1800.0
+        self.end_et = 1900.0
         self.race_complete_perc = 126.0 / self.end_et #Approxed delta for driving to start line(126s)
-        
+        self.total_steps = 5000
+        self.curr_step = 0
+
+        self.step_delta = 1/self.total_steps
         
         self.lap = 0
         self.usage_multiplier = 3.0
         # self.state = self._extract_state(self.telemetry_data[0], self.scoring_data[0])
 
         self.state = np.array([
-            self.lap_dist,
+            # self.lap_dist,
             self.race_complete_perc,
             self.fuel_tank_capacity,
             self.wheel1_wear,
@@ -265,6 +272,7 @@ class RacingEnv(gym.Env):
             self.wheel3_temp,
             self.wheel4_temp,
             self.path_wetness,
+            self.curr_step/self.total_steps,
             self.last_impact_et,
             self.last_impact_magnitude,
             self.num_penalties,
@@ -292,7 +300,7 @@ class RacingEnv(gym.Env):
             self.refueled_flag
         ], dtype=np.float32)
 
-        self.curr_window.append(self.state)
+        # self.curr_window.append(self.state)
 
 
         return self.state
@@ -363,7 +371,10 @@ class RacingEnv(gym.Env):
         prev_sector = self.sector
         while True:
             if (prev_sector == 2.0 and self.sector == 0.0) or (prev_sector == 1.0 and self.sector == 2.0) or self.finish_status == 1.0:
-                reward = self.compute_reward(last_step)
+                if self.lap == 0:
+                    reward = 0.0
+                else:
+                    reward = self.compute_reward(last_step)
 
                 
                 
@@ -374,31 +385,42 @@ class RacingEnv(gym.Env):
             done = False
             data_lstm = [] # there will be data from LSTM model
 
-            data_lstm = generate_predictions(self.LSTM_model, self.curr_window)
+            
 
+            data_lstm, self.h_c = generate_predictions(self.LSTM_model, self.state,self.scaler_X, self.scaler_Y,self.h_c)
+
+            LAP_DIST_norm = (np.atan2(data_lstm[0],data_lstm[1]) + 2 * np.pi) % (2 * np.pi) / (2 * np.pi)
+
+            data_lstm = np.hstack((LAP_DIST_norm, data_lstm[2:]))
 
             pit_entry_line = 13483.0
             pit_exit_line = 390.0
 
+            if data_lstm[1] < 0.0:
+                data_lstm[1] = 0.0
+
+            for i in range(3, 7):
+                if data_lstm[i] > 1.0:
+                    data_lstm[i] = 1.0
             
-            
-            
+            if data_lstm[11] < 0.0:
+                data_lstm[11] = 0.0
 
             sectors = {1: (0.0, 0.14),
-                    0: (0.14, 0.56),
-                    2: (0.56, 1.0)}
+                    2: (0.14, 0.56),
+                    0: (0.56, 1.0)}
             threshold = 0.97
-            print("LAP DIST: ",data_lstm[-1][0])
-            print("Race DIST: ",data_lstm[-1][1])
+            print("LAP DIST: ",data_lstm[0])
+            print("Race DIST: ",data_lstm[1])
             
             #Check if lap ended       
-            if (data_lstm[4][0] > threshold).any() and (data_lstm[3][0] < 0.1).any():
+            if (data_lstm[0] > threshold) and (data_lstm[0] < 0.1):
                 self.laps += 1
                 if self.laps == 1:
                     self.has_last_lap = 1.0
 
             #Check if race is finished
-            if data_lstm[-1][1] >= 1.0 and data_lstm[:-1][0] > threshold:
+            if data_lstm[1] >= 1.0 and data_lstm[0] > threshold:
                 finish_status = 1.0
                 if finish_status == 1.0:
                     # reward = 1000.0
@@ -408,11 +430,11 @@ class RacingEnv(gym.Env):
             #Check current sector
             prev_sector = self.sector
             for sec, (start, end) in sectors.items():
-                if start <= data_lstm[-1][0] <= end:
+                if start <= data_lstm[0] <= end:
                     self.sector = float(sec)
-                    if self.sector == 2:
-                        reward = self.compute_reward(last_step)
-                    break
+                    # if self.sector == 2:
+                    #     reward = self.compute_reward(last_step)
+                    # break
 
                 
             
@@ -422,7 +444,7 @@ class RacingEnv(gym.Env):
             
             # Check if in pits and handle pit stop actions
             if action[0] == 1:
-                if pit_entry_line_dist <= data_lstm[-1][0] <= 1.01 and 0 <= data_lstm[-1][0] <= pit_exit_line_dist and self.laps != 0:
+                if pit_entry_line_dist <= data_lstm[0] <= 1.01 and 0 <= data_lstm[0] <= pit_exit_line_dist and self.laps != 0:
                     self.in_pits = 1.0
                     if not self.checked_pit:
                         self.number_of_pit_stops += 1.0
@@ -431,7 +453,7 @@ class RacingEnv(gym.Env):
                     self.in_pits = 0.0
                     self.checked_pit = False
                     
-                if data_lstm[-1][0] > 80.0:
+                if data_lstm[0] > 80.0:
                     self.tire_compound_index = action[1] - 1.0
                     self.changed_tires_flag = 1.0
                     self.fuel_tank_capacity = action[3] * 0.05
@@ -442,6 +464,9 @@ class RacingEnv(gym.Env):
                 
             
             impact_magnitude = random_impact_magnitude()
+            if impact_magnitude > 0.0:
+                self.last_impact_et = abs(data_lstm[1] * self.end_et  - self.prev_et)
+                
             self.dent_severity = generate_dent_severity(impact_magnitude,self.dent_severity)
 
             weather_conditions = generate_weather_conditions(1,self.raining,self.ambient_temp,self.track_temp)
@@ -452,18 +477,18 @@ class RacingEnv(gym.Env):
             self.track_temp = weather_start["mTrackTemp"]
                             
 
-            self.lap_dist = data_lstm[-1][0]
-            self.lap_complete_perc = data_lstm[-1][1]
-            self.fuel_tank_capacity = data_lstm[-1][2]
-            self.wheel1_wear = data_lstm[-1][3]
-            self.wheel2_wear = data_lstm[-1][4]
-            self.wheel3_wear = data_lstm[-1][5]
-            self.wheel4_wear = data_lstm[-1][6]
-            self.wheel1_temp = data_lstm[-1][7]
-            self.wheel2_temp = data_lstm[-1][8]
-            self.wheel3_temp = data_lstm[-1][9]
-            self.wheel4_temp = data_lstm[-1][10]
-            self.path_wetness = data_lstm[-1][11]
+            self.lap_dist = data_lstm[0]
+            self.race_complete_perc = data_lstm[1]
+            self.fuel_tank_capacity = data_lstm[2]
+            self.wheel1_wear = data_lstm[3]
+            self.wheel2_wear = data_lstm[4]
+            self.wheel3_wear = data_lstm[5]
+            self.wheel4_wear = data_lstm[6]
+            self.wheel1_temp = data_lstm[7]
+            self.wheel2_temp = data_lstm[8]
+            self.wheel3_temp = data_lstm[9]
+            self.wheel4_temp = data_lstm[10]
+            self.path_wetness = data_lstm[11]
 
             
 
@@ -511,11 +536,108 @@ class RacingEnv(gym.Env):
                 self.refueled_flag
             ], dtype=np.float32)
 
-            self.curr_window.append(self.state)
+            # self.curr_window.append(self.state)
 
-            
+            self.history.append(self.state)
+
+            self.prev_et = data_lstm[1] * self.end_et
+
+            print("Lap dist:", self.state[0])
+            print("Race complete perc:", self.state[1])
+            print("Fuel tank capacity:", self.state[2])
+            print("Wheel wear:", self.state[3:7])
+            print("Wheel temp:", self.state[7:11])
+            print("Path wetness:", self.state[11])
+            print("Last impact ET:", self.state[12])
+            print("Last impact magnitude:", self.state[13])
+            print("Num penalties:", self.state[14])
+            print("Raining:", self.state[15])
+            print("Ambient temp:", self.state[16])
+            print("Track temp:", self.state[17])
+            print("End ET:", self.state[18])
+            print("Dent severity:", self.state[19:27])
+            print("Has last lap:", self.state[27])
+            print("Finish status:", self.state[28])
+            print("Total laps:", self.state[29])
+            print("Sector:", self.state[30])
+            print("Num pitstops:", self.state[31])
+            print("In pits:", self.state[32])
+            print("Tire compound index:", self.state[33])
+            print("Usage multiplier:", self.state[34])
+            print("Changed tires flag:", self.state[35])
+            print("Refueled flag:", self.state[36])
+
+            print("-----")
+
+            if len(self.history) == 5000:
+                self.make_plots()
+                self.history = []
+                exit()
+
+
+
+            # print(self.state)
 
         return self.state, reward, done, {}
+
+    def make_plots(self):
+        history_array = np.array(self.history)
+        plt.figure(figsize=(12, 8))
+
+        plt.subplot(3, 3, 1)
+        plt.plot(history_array[:, 0], label='Lap Distance')
+        plt.plot(history_array[:, 1], label='Race Complete %')
+        plt.title('Lap Distance and Race Completion Over Time')
+        plt.xlabel('Time Steps')
+        plt.legend()
+
+        plt.subplot(3, 3, 2)
+        plt.plot(history_array[:, 2], label='Fuel Tank Capacity')
+        plt.title('Fuel Tank Capacity Over Time')
+        plt.xlabel('Time Steps')
+        plt.legend()
+
+        plt.subplot(3, 3, 3)
+        plt.plot(history_array[:, 3:7], label='Wheel Wear')
+        plt.title('Wheel Wear Over Time')
+        plt.xlabel('Time Steps')
+        plt.legend()
+
+        plt.subplot(3, 3, 4)
+        plt.plot(history_array[:, 7:11], label='Wheel Temperature')
+        plt.title('Wheel Temperature Over Time')
+        plt.xlabel('Time Steps')
+        plt.legend()
+
+        plt.subplot(3, 3, 5)
+        plt.plot(history_array[:,11], label='Path Wetness', color='purple')
+        plt.title('Path Wetness Over Time')
+        plt.xlabel('Time Steps')
+        plt.legend()
+
+        plt.subplot(3, 3, 6)
+        plt.plot(history_array[:, 32], label='Inpits', color='orange')
+        plt.title('Inpits')
+        plt.xlabel('Time Steps')
+        plt.legend()
+
+        plt.subplot(3, 3, 7)
+        plt.plot(history_array[:, 30], label='Sector', color='green')
+        plt.title('Sector Over Time')
+        plt.xlabel('Time Steps')
+        plt.legend()
+
+        plt.subplot(3, 3, 8)
+        plt.plot(history_array[:, 15], label='Raining', color='red')
+        plt.title('Raining Over Time')
+        plt.xlabel('Time Steps')
+        plt.legend()
+
+
+
+        plt.tight_layout()
+        plt.show()
+
 
 
 #      Sektor zmienił się na 1.0 przy dystansie -0.01213
