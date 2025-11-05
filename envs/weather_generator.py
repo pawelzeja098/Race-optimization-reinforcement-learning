@@ -2,7 +2,7 @@
 # mAmbientTemp: min=5.33, max=40.0
 # mTrackTemp: min=9.0, max=47.35
 
-from random import uniform, random
+from random import uniform, random, choice
 
 def generate_weather_conditions(num_conditions,mRaining_start=0.0,mAmbientTemp_start=None,mTrackTemp_start=None):
     weather_conditions = []
@@ -11,16 +11,16 @@ def generate_weather_conditions(num_conditions,mRaining_start=0.0,mAmbientTemp_s
     mTrackTemp = mTrackTemp_start if mTrackTemp_start is not None else mAmbientTemp + uniform(2, 5)
 
     for _ in range(num_conditions):
-        condition = {
-            "mRaining": round(mRaining, 2),
-            "mAmbientTemp": round(mAmbientTemp, 2),
-            "mTrackTemp": round(mTrackTemp, 2)
-        }
-        weather_conditions.append(condition)
+        # condition = {
+        #     "mRaining": round(mRaining, 2),
+        #     "mAmbientTemp": round(mAmbientTemp, 2),
+        #     "mTrackTemp": round(mTrackTemp, 2)
+        # }
+        # weather_conditions.append(condition)
 
         # Deszcz: jeśli nie pada, bardzo mała szansa na start
         if mRaining < 0.01:
-            if random() < 0.01:  # 1% szansy na początek deszczu
+            if random() < 0.001:  # 1% szansy na początek deszczu
                 mRaining = 0.1
         else:
             # Jeśli pada, powolna zmiana intensywności
@@ -30,10 +30,17 @@ def generate_weather_conditions(num_conditions,mRaining_start=0.0,mAmbientTemp_s
                 mRaining = 0.0
 
         # Temperatura: powolne zmiany, ograniczone zakresy
-        mAmbientTemp += uniform(-0.2, 0.2)
+        # mAmbientTemp += uniform(-0.2, 0.2)
+        mAmbientTemp += choice([-0.2, 0.2])
         mAmbientTemp = min(40, max(5.33, mAmbientTemp))
         # Tor reaguje wolniej na zmiany otoczenia
-        mTrackTemp += uniform(-0.1, 0.1) + 0.5 * (abs(mAmbientTemp - mTrackTemp))
+        mTrackTemp += choice([-0.1, 0.1]) + 0.1 * (mAmbientTemp - mTrackTemp)
         mTrackTemp = min(47.35, max(9, mTrackTemp))
+
+        weather_conditions = {
+            "mRaining": round(mRaining, 2),
+            "mAmbientTemp": round(mAmbientTemp, 2),
+            "mTrackTemp": round(mTrackTemp, 2)
+        }
 
     return weather_conditions

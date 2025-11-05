@@ -177,7 +177,7 @@ def generate_predictions(model, input_seq,scaler_X=None, scaler_Y=None,h_c=None)
     with torch.no_grad():
         input_tensor = torch.tensor(input_seq, dtype=torch.float32).reshape(1, 1, 38).to(device)
         predictions , h_c = model(input_tensor, h_c)
-        predictions = predictions.cpu().numpy().reshape(1, 13)
+        predictions = predictions.cpu().numpy().reshape(1, 12)
         
         predictions = scaler_Y.inverse_transform(predictions)
         return predictions.flatten(), h_c
@@ -390,4 +390,4 @@ def train_model():
 
     print("✅ Model saved to models/lstm1_model.pth")
 
-train_model()
+# train_model()
