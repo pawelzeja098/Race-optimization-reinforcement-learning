@@ -56,6 +56,7 @@ class RacingEnv(gym.Env):
         self.prev_et = 0.0
         self.curr_step = 0
         self.total_steps = 1600
+        self.impact_flag = 0.0
 
         self.weather_conditions = generate_weather_conditions(self.total_steps)
         
@@ -74,16 +75,23 @@ class RacingEnv(gym.Env):
         # self.curr_window = deque(maxlen=30)
 
         self.impact_magnitude_history = []
-        self.last_impact_et_history = []
-        self.dent_severity_history = [[] for _ in range(8)]
+        self.impact_flag_history = []
+        self.dent_severity_history = []
 
         for i in range(self.total_steps):
 
             impact_magnitude = random_impact_magnitude()
             if impact_magnitude > 0.0:
-                self.last_impact_et = abs(data_lstm[1] * self.end_et  - self.prev_et)
+                impact_flag = 1.0
+            else:
+                impact_flag = 0.0
                     
-            self.dent_severity = generate_dent_severity(impact_magnitude,self.dent_severity)
+            dent_severity = generate_dent_severity(impact_magnitude,dent_severity)
+            self.impact_magnitude_history.append(impact_magnitude)
+            self.impact_flag_history.append(impact_flag)
+            self.dent_severity_history.append(dent_severity)
+               
+
 
         
 
@@ -114,13 +122,14 @@ class RacingEnv(gym.Env):
         0.0,   # Wheel temperature
         0.0,   # Path wetness
         0.0,   # Current step ratio
-        0.0,   # Last impact ET
+        # 0.0,   # Last impact ET
         0.0,   # Last impact magnitude
         0.0,   # Number of penalties
         0.0,   # Raining
         0.0,   # Ambient temp
         0.0,   # Track temp
         0.0,   # End ET
+        0.0,   # Impact flag
         0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  # dent severities
         0.0,   # #has last lap
         0.0,   # Finish status
@@ -148,13 +157,14 @@ class RacingEnv(gym.Env):
         600.0,   # Wheel temperature
         1.0,    # Path wetness
         1.0,    # Current step ratio
-        86500.0,   # Last impact ET
-        50000.0,     # Last impact magnitude
+        # 86500.0,   # Last impact ET
+        25000.0,     # Last impact magnitude
         100.0,   # Number of penalties
         1.0,   # Raining
         45.0,   # Ambient temp
         60.0,   # Track temp
         86500.0,   # End ET
+        1.0,   # Impact flag
         2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0,  # dent severities
         1.0,   # #has last lap
         1.0,   # Finish status
@@ -232,6 +242,7 @@ class RacingEnv(gym.Env):
         
         self.lap = 0
         self.usage_multiplier = 1.0
+        self.impact_flag = 0.0
         # self.state = self._extract_state(self.telemetry_data[0], self.scoring_data[0])
 
         self.state = np.array([
@@ -248,13 +259,14 @@ class RacingEnv(gym.Env):
             self.wheel4_temp,
             self.path_wetness,
             self.curr_step/self.total_steps,
-            self.last_impact_et,
+            # self.last_impact_et,
             self.last_impact_magnitude,
             self.num_penalties,
             self.raining,
             self.ambient_temp,
             self.track_temp,
             self.end_et,
+            self.impact_flag,
             self.dent_severity[0],
             self.dent_severity[1],
             self.dent_severity[2],
@@ -443,11 +455,15 @@ class RacingEnv(gym.Env):
                             self.dent_severity[i] = 0.0
                 
             
-            impact_magnitude = random_impact_magnitude()
-            if impact_magnitude > 0.0:
-                self.last_impact_et = abs(data_lstm[1] * self.end_et  - self.prev_et)
+            # impact_magnitude = random_impact_magnitude()
+            # if impact_magnitude > 0.0:
+            #     self.last_impact_et = abs(data_lstm[1] * self.end_et  - self.prev_et)
                 
-            self.dent_severity = generate_dent_severity(impact_magnitude,self.dent_severity)
+            # self.dent_severity = generate_dent_severity(impact_magnitude,self.dent_severity)
+
+            self.last_impact_magnitude = self.impact_magnitude_history[self.curr_step]
+            self.impact_flag = self.impact_flag_history[self.curr_step]
+            self.dent_severity = self.dent_severity_history[self.curr_step]
 
             # weather_conditions = generate_weather_conditions(1,self.raining,self.ambient_temp,self.track_temp)
             weather_conditions = self.weather_conditions[self.curr_step]
@@ -492,13 +508,14 @@ class RacingEnv(gym.Env):
                 self.wheel4_temp,
                 self.path_wetness,
                 self.curr_step/self.total_steps,
-                self.last_impact_et,
+                # self.last_impact_et,
                 self.last_impact_magnitude,
                 self.num_penalties,
                 self.raining,
                 self.ambient_temp,
                 self.track_temp,
                 self.end_et,
+                self.impact_flag,
                 self.dent_severity[0],
                 self.dent_severity[1],
                 self.dent_severity[2],
