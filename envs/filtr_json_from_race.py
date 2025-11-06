@@ -3,6 +3,7 @@
 import numpy as np
 import sqlite3
 import json
+import copy
 
 # from generate_actions_BC import generate_actions_BC
 # from generate_state_BC import extract_state
@@ -140,9 +141,9 @@ def extract_state(telem_file_raw, scoring_file_raw):
         endET = -1
         print("Kolejny wyscig")
         for i in range(len(telemetry_all)):
-            
-            telemetry = telemetry_all[i]
-            scoring = scoring_all[i]
+
+            telemetry = copy.deepcopy(telemetry_all[i])
+            scoring = copy.deepcopy(scoring_all[i])
             #SPRAWDZIC CZY NA POCZATKU JEST 0
             if scoring["mLapDist"] <= 0.0:
                 
@@ -175,8 +176,18 @@ def extract_state(telem_file_raw, scoring_file_raw):
                 last_lap = 0  # placeholder
                 best_lap = 0
             
-            if telemetry["mLastImpactMagnitude"] == telemetry_all[i-1]["mLastImpactMagnitude"]:
+            print(telemetry["mLastImpactMagnitude"])
+            print(telemetry_all[i-1]["mLastImpactMagnitude"] if i > 0 else "No previous data")
+
+            if i > 0 and telemetry["mLastImpactMagnitude"] == telemetry_all[i-1]["mLastImpactMagnitude"]:
                 telemetry["mLastImpactMagnitude"] = 0.0
+                impact_flag = 0.0
+            elif i == 0:
+                impact_flag = 0.0
+                telemetry["mLastImpactMagnitude"] = 0.0
+            else:
+                impact_flag = 1.0
+                print("Impact", telemetry["mLastImpactMagnitude"])
             
             if scoring["mEndET"] < 0:
                 endET = scoring_all[i+4]["mEndET"]
@@ -213,7 +224,7 @@ def extract_state(telem_file_raw, scoring_file_raw):
                 #dane pomocnicze ciągłe
                 curr_step,
 
-                telemetry["mLastImpactET"],
+                # telemetry["mLastImpactET"],
                 telemetry["mLastImpactMagnitude"],
                 scoring["mNumPenalties"],
                 scoring["mRaining"],
@@ -223,7 +234,7 @@ def extract_state(telem_file_raw, scoring_file_raw):
 
                 #dane dyskretne pomocniczne
                 
-                
+                impact_flag,
                 telemetry["mDentSeverity"][0],  # Not defined which part of the car this refers to each index
                 telemetry["mDentSeverity"][1],
                 telemetry["mDentSeverity"][2], 

@@ -10,13 +10,15 @@ def generate_weather_conditions(num_conditions,mRaining_start=0.0,mAmbientTemp_s
     mAmbientTemp = mAmbientTemp_start if mAmbientTemp_start is not None else uniform(5, 40)
     mTrackTemp = mTrackTemp_start if mTrackTemp_start is not None else mAmbientTemp + uniform(2, 5)
 
+    # if num_conditions == 1:
+
     for _ in range(num_conditions):
-        # condition = {
-        #     "mRaining": round(mRaining, 2),
-        #     "mAmbientTemp": round(mAmbientTemp, 2),
-        #     "mTrackTemp": round(mTrackTemp, 2)
-        # }
-        # weather_conditions.append(condition)
+        condition = {
+            "mRaining": round(mRaining, 2),
+            "mAmbientTemp": round(mAmbientTemp, 2),
+            "mTrackTemp": round(mTrackTemp, 2)
+        }
+        weather_conditions.append(condition)
 
         # Deszcz: jeśli nie pada, bardzo mała szansa na start
         if mRaining < 0.01:
@@ -37,10 +39,10 @@ def generate_weather_conditions(num_conditions,mRaining_start=0.0,mAmbientTemp_s
         mTrackTemp += choice([-0.1, 0.1]) + 0.1 * (mAmbientTemp - mTrackTemp)
         mTrackTemp = min(47.35, max(9, mTrackTemp))
 
-        weather_conditions = {
-            "mRaining": round(mRaining, 2),
-            "mAmbientTemp": round(mAmbientTemp, 2),
-            "mTrackTemp": round(mTrackTemp, 2)
-        }
+        # weather_conditions = {
+        #     "mRaining": round(mRaining, 2),
+        #     "mAmbientTemp": round(mAmbientTemp, 2),
+        #     "mTrackTemp": round(mTrackTemp, 2)
+        # }
 
     return weather_conditions

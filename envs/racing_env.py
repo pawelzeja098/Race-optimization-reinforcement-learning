@@ -55,6 +55,9 @@ class RacingEnv(gym.Env):
         self.usage_multiplier = 1.0
         self.prev_et = 0.0
         self.curr_step = 0
+        self.total_steps = 1600
+
+        self.weather_conditions = generate_weather_conditions(self.total_steps)
         
         self.laps = 0
         self.checked_pit = False
@@ -69,6 +72,18 @@ class RacingEnv(gym.Env):
         self.LSTM_model.load_state_dict(torch.load("models/lstm1_model.pth", map_location=device))
         self.LSTM_model.eval()
         # self.curr_window = deque(maxlen=30)
+
+        self.impact_magnitude_history = []
+        self.last_impact_et_history = []
+        self.dent_severity_history = [[] for _ in range(8)]
+
+        for i in range(self.total_steps):
+
+            impact_magnitude = random_impact_magnitude()
+            if impact_magnitude > 0.0:
+                self.last_impact_et = abs(data_lstm[1] * self.end_et  - self.prev_et)
+                    
+            self.dent_severity = generate_dent_severity(impact_magnitude,self.dent_severity)
 
         
 
@@ -201,16 +216,16 @@ class RacingEnv(gym.Env):
         self.changed_tires_flag = 0.0
         self.refueled_flag = 0.0
 
-        weather_conditions = generate_weather_conditions(1)
+        # weather_conditions = generate_weather_conditions(1)
 
-        weather_start = weather_conditions
+        weather_start = self.weather_conditions[0]
         self.raining = weather_start["mRaining"]
         self.ambient_temp = weather_start["mAmbientTemp"]
         self.track_temp = weather_start["mTrackTemp"]
 
         self.end_et = 734.0
         self.race_complete_perc = 126.0 / self.end_et #Approxed delta for driving to start line(126s)
-        self.total_steps = 1600
+        
         self.curr_step = 0
 
         self.step_delta = 1/self.total_steps
@@ -434,7 +449,8 @@ class RacingEnv(gym.Env):
                 
             self.dent_severity = generate_dent_severity(impact_magnitude,self.dent_severity)
 
-            weather_conditions = generate_weather_conditions(1,self.raining,self.ambient_temp,self.track_temp)
+            # weather_conditions = generate_weather_conditions(1,self.raining,self.ambient_temp,self.track_temp)
+            weather_conditions = self.weather_conditions[self.curr_step]
 
             weather_start = weather_conditions
             self.raining = weather_start["mRaining"]

@@ -70,7 +70,7 @@ class LSTMStatePredictor(nn.Module):
 
 def create_scalers(X,Y):
 
-    cont_indices_x = slice(0, 20)   # continuous columns for X (0–19)
+    cont_indices_x = slice(0, 19)   # continuous columns for X (0–18)
     cont_indices_y = slice(0, 12)   # continuous columns for Y (0–11)
 
     # Scale continuous features
@@ -85,7 +85,7 @@ def create_scalers(X,Y):
     return scaler_X, scaler_Y
 
 def scale_input(X, Y, scaler_X, scaler_Y):
-    cont_indices_x = slice(0, 20)   # continuous columns for X
+    cont_indices_x = slice(0, 19)   # continuous columns for X
     cont_indices_y = slice(0, 12)   # continuous columns for Y
 
     X_scaled_grouped = []
@@ -121,8 +121,8 @@ def scale_single_input(raw_vector_x, scaler_x_cont):
     Skaluje pojedynczy wektor (37,), stosując scaler tylko do 
     części ciągłej (0-19) i zostawiając kategorialną (20-36).
     """
-    cont_indices_x = slice(0, 20)
-    cat_indices_x = slice(20, 38)
+    cont_indices_x = slice(0, 19)
+    cat_indices_x = slice(19, 38)
     
     # raw_vector_x[cont_indices_x] ma kształt (19,)
     # Musimy go przekształcić na (1, 19) dla scalera
@@ -390,4 +390,4 @@ def train_model():
 
     print("✅ Model saved to models/lstm1_model.pth")
 
-# train_model()
+train_model()
