@@ -12,7 +12,7 @@ import numpy as np
 # mDentSeverity[6]: min=0.0, max=0.0
 # mDentSeverity[7]: min=0.0, max=2.0
 
-def random_impact_magnitude(prob_impact = 0.01):
+def random_impact_magnitude(prob_impact = 0.0000001):
 
     if np.random.rand() > prob_impact:
         return 0.0

@@ -77,7 +77,7 @@ class RacingEnv(gym.Env):
         self.impact_magnitude_history = []
         self.impact_flag_history = []
         self.dent_severity_history = []
-
+        self.dent_severity = [0.0]*8
         for i in range(self.total_steps):
 
             impact_magnitude = random_impact_magnitude()
@@ -86,10 +86,10 @@ class RacingEnv(gym.Env):
             else:
                 impact_flag = 0.0
                     
-            dent_severity = generate_dent_severity(impact_magnitude,dent_severity)
+            self.dent_severity = generate_dent_severity(impact_magnitude,self.dent_severity)
             self.impact_magnitude_history.append(impact_magnitude)
             self.impact_flag_history.append(impact_flag)
-            self.dent_severity_history.append(dent_severity)
+            self.dent_severity_history.append(self.dent_severity)
                
 
 
@@ -355,6 +355,7 @@ class RacingEnv(gym.Env):
         
 
     def step(self,action,last_step):
+        """One step of the environment's dynamics.(NOT ONE LAP)"""
         prev_sector = self.sector
         while True:
             if (prev_sector == 2.0 and self.sector == 0.0) or (prev_sector == 1.0 and self.sector == 2.0) or self.finish_status == 1.0:
@@ -373,23 +374,27 @@ class RacingEnv(gym.Env):
             data_lstm = [] # there will be data from LSTM model
 
             
-
+            #Get lstm predictions
             data_lstm, self.h_c = generate_predictions(self.LSTM_model, self.state,self.scaler_X, self.scaler_Y,self.h_c)
 
+            #Get back from [sin, cos] to lap distance
             LAP_DIST_norm = (np.atan2(data_lstm[0],data_lstm[1]) + 2 * np.pi) % (2 * np.pi) / (2 * np.pi)
 
             data_lstm = np.hstack((LAP_DIST_norm, data_lstm[2:]))
 
+            #Pit entry and exit lines got from track data
             pit_entry_line = 13483.0
             pit_exit_line = 390.0
 
             # if data_lstm[1] < 0.0:
             #     data_lstm[1] = 0.0
 
+            #Clipping values to valid ranges
             for i in range(2, 6):
                 if data_lstm[i] > 1.0:
                     data_lstm[i] = 1.0
             
+
             if data_lstm[10] < 0.0:
                 data_lstm[10] = 0.0
 
@@ -416,6 +421,8 @@ class RacingEnv(gym.Env):
             #         # reward = 1000.0
             #         done = True
             #         pass
+
+            #Check if max steps reached
             if self.curr_step >= self.total_steps:
                 done = True
 
@@ -648,18 +655,18 @@ class RacingEnv(gym.Env):
         plt.legend()
         plt.grid(True)
 
-        # 13. Last Impact ET
-        plt.subplot(6, 7, 7)
-        plt.plot(history_array[:, 12], label='Impact ET', color='red')
-        plt.title('Last Impact ET')
-        plt.xlabel('Time Steps')
-        plt.ylabel('ET')
-        plt.legend()
-        plt.grid(True)
+        # # 13. Last Impact ET
+        # plt.subplot(6, 7, 7)
+        # plt.plot(history_array[:, 12], label='Impact ET', color='red')
+        # plt.title('Last Impact ET')
+        # plt.xlabel('Time Steps')
+        # plt.ylabel('ET')
+        # plt.legend()
+        # plt.grid(True)
 
         # 14. Last Impact Magnitude
-        plt.subplot(6, 7, 8)
-        plt.plot(history_array[:, 13], label='Impact Magnitude', color='darkred')
+        plt.subplot(6, 7, 7)
+        plt.plot(history_array[:, 12], label='Impact Magnitude', color='darkred')
         plt.title('Last Impact Magnitude')
         plt.xlabel('Time Steps')
         plt.ylabel('Magnitude')
@@ -667,8 +674,8 @@ class RacingEnv(gym.Env):
         plt.grid(True)
 
         # 15. Num Penalties
-        plt.subplot(6, 7, 9)
-        plt.plot(history_array[:, 14], label='Penalties', color='black')
+        plt.subplot(6, 7, 8)
+        plt.plot(history_array[:, 13], label='Penalties', color='black')
         plt.title('Number of Penalties')
         plt.xlabel('Time Steps')
         plt.ylabel('Count')
@@ -676,8 +683,8 @@ class RacingEnv(gym.Env):
         plt.grid(True)
 
         # 16. Raining
-        plt.subplot(6, 7, 10)
-        plt.plot(history_array[:, 15], label='Raining', color='skyblue')
+        plt.subplot(6, 7, 9)
+        plt.plot(history_array[:, 14], label='Raining', color='skyblue')
         plt.title('Raining Status')
         plt.xlabel('Time Steps')
         plt.ylabel('0/1')
@@ -685,8 +692,8 @@ class RacingEnv(gym.Env):
         plt.grid(True)
 
         # 17. Ambient Temperature
-        plt.subplot(6, 7, 11)
-        plt.plot(history_array[:, 16], label='Ambient Temp', color='brown')
+        plt.subplot(6, 7, 10)
+        plt.plot(history_array[:, 15], label='Ambient Temp', color='brown')
         plt.title('Ambient Temperature')
         plt.xlabel('Time Steps')
         plt.ylabel('Temp (°C)')
@@ -694,8 +701,8 @@ class RacingEnv(gym.Env):
         plt.grid(True)
 
         # 18. Track Temperature
-        plt.subplot(6, 7, 12)
-        plt.plot(history_array[:, 17], label='Track Temp', color='cyan')
+        plt.subplot(6, 7, 11)
+        plt.plot(history_array[:, 16], label='Track Temp', color='cyan')
         plt.title('Track Temperature')
         plt.xlabel('Time Steps')
         plt.ylabel('Temp (°C)')
@@ -703,11 +710,19 @@ class RacingEnv(gym.Env):
         plt.grid(True)
 
         # 19. End ET
-        plt.subplot(6, 7, 13)
-        plt.plot(history_array[:, 18], label='End ET', color='gray')
+        plt.subplot(6, 7, 12)
+        plt.plot(history_array[:, 17], label='End ET', color='gray')
         plt.title('End ET')
         plt.xlabel('Time Steps')
         plt.ylabel('ET')
+        plt.legend()
+        plt.grid(True)
+
+        plt.subplot(6, 7, 13)
+        plt.plot(history_array[:, 18], label='Impact flag', color='gray')
+        plt.title('Impact flag')
+        plt.xlabel('Time Steps')
+        plt.ylabel('Flag')
         plt.legend()
         plt.grid(True)
 

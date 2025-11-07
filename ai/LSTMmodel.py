@@ -390,4 +390,4 @@ def train_model():
 
     print("✅ Model saved to models/lstm1_model.pth")
 
-train_model()
+# train_model()
