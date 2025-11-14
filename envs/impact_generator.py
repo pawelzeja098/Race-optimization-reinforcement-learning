@@ -12,7 +12,7 @@ import numpy as np
 # mDentSeverity[6]: min=0.0, max=0.0
 # mDentSeverity[7]: min=0.0, max=2.0
 
-def random_impact_magnitude(prob_impact = 0.0000001):
+def random_impact_magnitude(prob_impact = 0.0000001): #real is 0.01
 
     if np.random.rand() > prob_impact:
         return 0.0
@@ -27,41 +27,55 @@ def generate_dent_severity(impact_magnitude,dent_severity_current):
     # Przykładowe progi i losowanie uszkodzenia
     if impact_magnitude == 0.0:
         return dent_severity_current
+    values = [0, 1, 2, 3] #front,right,left,rear
+    probabilities = [0.35, 0.15, 0.15, 0.35]
+
+    random_value = np.random.choice(values, p=probabilities)
+
+    #map elements to damage based on impact location
+    if random_value == 0:
+        elements_to_damage = [0,1,7]
+    if random_value == 1:
+        elements_to_damage = [1,3]
+    if random_value == 2:
+        elements_to_damage = [5,7]
+    if random_value == 3:
+        elements_to_damage = [3,4,5]
     
     if impact_magnitude < 2000:
-        elem_damage_prob = 0.01
+        elem_damage_prob = 0.05
         damage_levels = [1.0]
         damage_probs = [1.0]
     elif impact_magnitude < 4000:
-        elem_damage_prob = 0.015
+        elem_damage_prob = 0.08
         damage_levels = [1.0]
         damage_probs = [1.0]
     elif impact_magnitude < 6000:
-        elem_damage_prob = 0.02
+        elem_damage_prob = 0.1
         damage_levels = [1.0, 2.0]
         damage_probs = [0.7, 0.3]
     elif impact_magnitude < 8000:
-        elem_damage_prob = 0.03
+        elem_damage_prob = 0.2
         damage_levels = [1.0, 2.0]
         damage_probs = [0.6, 0.4]
     elif impact_magnitude < 12000:
-        elem_damage_prob = 0.04
+        elem_damage_prob = 0.4
         damage_levels = [1.0, 2.0]
         damage_probs = [0.5, 0.5]
     elif impact_magnitude < 15000:
-        elem_damage_prob = 0.05
+        elem_damage_prob = 0.6
         damage_levels = [1.0, 2.0]
         damage_probs = [0.4, 0.6]
     elif impact_magnitude < 20000:
-        elem_damage_prob = 0.07
+        elem_damage_prob = 0.9
         damage_levels = [1.0, 2.0]
         damage_probs = [0.3, 0.7]
     else:
-        elem_damage_prob = 0.09
+        elem_damage_prob = 1.0
         damage_levels = [2.0]
         damage_probs = [1.0]
 
-    for i in range(8):
+    for i in elements_to_damage:
         if i == 2 or i == 6:
             continue  # te elementy się nie uszkadzają
         if np.random.rand() < elem_damage_prob:  # szansa na uszkodzenie tego elementu

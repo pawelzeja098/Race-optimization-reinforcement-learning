@@ -23,12 +23,12 @@ def generate_weather_conditions(num_conditions,mRaining_start=0.0,mAmbientTemp_s
         # Deszcz: jeśli nie pada, bardzo mała szansa na start
         if mRaining < 0.01:
             if random() < 0.001:  # 1% szansy na początek deszczu
-                mRaining = 0.1
+                mRaining = uniform(0.1, 1.0)  
         else:
             # Jeśli pada, powolna zmiana intensywności
             mRaining = min(1, max(0, mRaining + uniform(-0.01, 0.01)))
-            # Szansa na koniec deszczu tylko jeśli bardzo słaby
-            if random() < 0.05: #mRaining < 0.05 
+            
+            if random() < 0.005: #mRaining < 0.05 
                 mRaining = 0.0
 
         # Temperatura: powolne zmiany, ograniczone zakresy

@@ -57,6 +57,7 @@ class RacingEnv(gym.Env):
         self.curr_step = 0
         self.total_steps = 1600
         self.impact_flag = 0.0
+        self.pitted = False
 
         self.weather_conditions = generate_weather_conditions(self.total_steps)
         
@@ -357,15 +358,19 @@ class RacingEnv(gym.Env):
     def step(self,action,last_step):
         """One step of the environment's dynamics.(NOT ONE LAP)"""
         prev_sector = self.sector
+        reward = 0.0
         while True:
-            if (prev_sector == 2.0 and self.sector == 0.0) or (prev_sector == 1.0 and self.sector == 2.0) or self.finish_status == 1.0:
+            # if (prev_sector == 2.0 and self.sector == 0.0) or (prev_sector == 1.0 and self.sector == 2.0) or self.finish_status == 1.0:
+            if (prev_sector == 0.0 and self.sector == 1.0) or self.finish_status == 1.0:
                 if self.lap == 0:
                     reward = 0.0
                 else:
                     reward = self.compute_reward(last_step)
+            
+            if (prev_sector == 2.0 and self.sector == 0.0):
 
-                
-                
+
+
                 break
             
             # possible_power_settings = [0.5,0.6,0.7,0.8,0.9,1]
@@ -443,23 +448,28 @@ class RacingEnv(gym.Env):
             
             # Check if in pits and handle pit stop actions
             if action[0] == 1:
-                if pit_entry_line_dist <= data_lstm[0] <= 1.01 and 0 <= data_lstm[0] <= pit_exit_line_dist and self.laps != 0:
+                if (pit_entry_line_dist <= data_lstm[0] <= 1.01 or 0 <= data_lstm[0] <= pit_exit_line_dist) and self.laps != 0:
                     self.in_pits = 1.0
                     if not self.checked_pit:
-                        self.number_of_pit_stops += 1.0
                         self.checked_pit = True
                 else:
                     self.in_pits = 0.0
                     self.checked_pit = False
+                    self.pitted = False
+                
+                if self.in_pits == 1.0:
+                    a = 0
                     
-                if data_lstm[0] > 80.0:
+                if data_lstm[0] > 80.0/lap_dist_max and self.in_pits == 1.0 and not self.pitted:
                     self.tire_compound_index = action[1] - 1.0
                     self.changed_tires_flag = 1.0
-                    self.fuel_tank_capacity = action[3] * 0.05
+                    self.fuel_tank_capacity = min(action[3] * 0.05, self.fuel_tank_capacity)
                     self.refueled_flag = 1.0
                     if action[2] == 1:
                         for i in range(len(self.dent_severity)):
                             self.dent_severity[i] = 0.0
+                    self.pitted = True
+                    self.num_pit_stops += 1.0
                 
             
             # impact_magnitude = random_impact_magnitude()
