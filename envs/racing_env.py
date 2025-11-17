@@ -55,9 +55,10 @@ class RacingEnv(gym.Env):
         self.usage_multiplier = 1.0
         self.prev_et = 0.0
         self.curr_step = 0
-        self.total_steps = 1600
+        self.total_steps = 3200
         self.impact_flag = 0.0
         self.pitted = False
+        self.delta = 0.0
 
         self.weather_conditions = generate_weather_conditions(self.total_steps)
         
@@ -226,6 +227,7 @@ class RacingEnv(gym.Env):
         self.tire_compound_index = 3.0
         self.changed_tires_flag = 0.0
         self.refueled_flag = 0.0
+        self.h_c = None
 
         # weather_conditions = generate_weather_conditions(1)
 
@@ -234,8 +236,8 @@ class RacingEnv(gym.Env):
         self.ambient_temp = weather_start["mAmbientTemp"]
         self.track_temp = weather_start["mTrackTemp"]
 
-        self.end_et = 734.0
-        self.race_complete_perc = 126.0 / self.end_et #Approxed delta for driving to start line(126s)
+        self.end_et = 1464.0
+        # self.race_complete_perc = 126.0 / self.end_et #Approxed delta for driving to start line(126s)
         
         self.curr_step = 0
 
@@ -247,8 +249,8 @@ class RacingEnv(gym.Env):
         # self.state = self._extract_state(self.telemetry_data[0], self.scoring_data[0])
 
         self.state = np.array([
-            # self.lap_dist,
-            self.race_complete_perc,
+            self.lap_dist,
+            # self.race_complete_perc,
             self.fuel_tank_capacity,
             self.wheel1_wear,
             self.wheel2_wear,
@@ -338,16 +340,21 @@ class RacingEnv(gym.Env):
         reward = 0.0
         if self.sector == 0.0:
             lap_time = self.end_et * self.race_complete_perc
-        elif self.sector == 2.0:
-            delta = self.race_complete_perc/self.lap - last_step[0]
-            reward += delta * 100.0
-            if self.fuel_tank_capacity <= 0.05:
-                reward -= 50.0
-            if self.wheel1_wear >= 0.2 or self.wheel2_wear >= 0.2 or self.wheel3_wear >= 0.2 or self.wheel4_wear >= 0.2:
-                reward -= 20.0
+        elif self.sector == 1.0:
+            last_race_state = last_step[11]
+            curr_race_state = self.curr_step/self.total_steps
+            curr_delta = curr_race_state - last_race_state
+            reward = (curr_delta - self.delta) * 100.0
+            self.delta = curr_delta
+            # reward += delta * 100.0
+            
+            # if self.fuel_tank_capacity <= 0.05:
+            #     reward -= 50.0
+            # if self.wheel1_wear >= 0.2 or self.wheel2_wear >= 0.2 or self.wheel3_wear >= 0.2 or self.wheel4_wear >= 0.2:
+            #     reward -= 20.0
         elif self.finish_status == 1.0:
-            reward += 500.0
-            reward += 5 * self.laps
+            reward += 100.0
+            reward += 50000 * self.laps / self.total_steps
         return reward
         
 
@@ -362,7 +369,7 @@ class RacingEnv(gym.Env):
         while True:
             # if (prev_sector == 2.0 and self.sector == 0.0) or (prev_sector == 1.0 and self.sector == 2.0) or self.finish_status == 1.0:
             if (prev_sector == 0.0 and self.sector == 1.0) or self.finish_status == 1.0:
-                if self.lap == 0:
+                if self.laps == 0:
                     reward = 0.0
                 else:
                     reward = self.compute_reward(last_step)
@@ -393,6 +400,16 @@ class RacingEnv(gym.Env):
 
             # if data_lstm[1] < 0.0:
             #     data_lstm[1] = 0.0
+
+            # if len(self.history) > 0:
+            #     if data_lstm[1] > self.history[-1][1] and self.refueled_flag != 1.0:
+                   
+            #         data_lstm[1] = self.history[-1][1] - 0.001
+                
+            #     for i in range(2,6):
+            #         if data_lstm[i] > self.history[-1][i] and self.changed_tires_flag != 1.0:
+                        
+            #             data_lstm[i] = self.history[-1][i] - 0.001
 
             #Clipping values to valid ranges
             for i in range(2, 6):
@@ -430,6 +447,10 @@ class RacingEnv(gym.Env):
             #Check if max steps reached
             if self.curr_step >= self.total_steps:
                 done = True
+                self.make_plots()
+                self.history = []
+                break
+
 
             #Check current sector
             prev_sector = self.sector
@@ -445,13 +466,22 @@ class RacingEnv(gym.Env):
             lap_dist_max = 13623.9677734375
             pit_entry_line_dist = pit_entry_line / lap_dist_max
             pit_exit_line_dist = pit_exit_line / lap_dist_max
+
+            if self.fuel_tank_capacity <= 0.1:
+                done = True
+                reward = -100.0
+                self.make_plots()
+                self.history = []
+                break
             
             # Check if in pits and handle pit stop actions
-            if action[0] == 1:
+            if action[0] == 1 and self.laps > 1:
                 if (pit_entry_line_dist <= data_lstm[0] <= 1.01 or 0 <= data_lstm[0] <= pit_exit_line_dist) and self.laps != 0:
                     self.in_pits = 1.0
                     if not self.checked_pit:
                         self.checked_pit = True
+                    self.changed_tires_flag = 0.0
+                    self.refueled_flag = 0.0
                 else:
                     self.in_pits = 0.0
                     self.checked_pit = False
@@ -461,10 +491,12 @@ class RacingEnv(gym.Env):
                     a = 0
                     
                 if data_lstm[0] > 80.0/lap_dist_max and self.in_pits == 1.0 and not self.pitted:
-                    self.tire_compound_index = action[1] - 1.0
-                    self.changed_tires_flag = 1.0
-                    self.fuel_tank_capacity = min(action[3] * 0.05, self.fuel_tank_capacity)
-                    self.refueled_flag = 1.0
+                    if action[1] > 0:  # Tire change
+                        self.tire_compound_index = action[1] - 1.0
+                        self.changed_tires_flag = 1.0
+                    if action[3] * 0.05 > self.fuel_tank_capacity:  # Refuel
+                        self.fuel_tank_capacity = min(action[3] * 0.05, self.fuel_tank_capacity)
+                        self.refueled_flag = 1.0
                     if action[2] == 1:
                         for i in range(len(self.dent_severity)):
                             self.dent_severity[i] = 0.0
@@ -559,38 +591,38 @@ class RacingEnv(gym.Env):
 
             self.prev_et = data_lstm[1] * self.end_et
 
-            print("Lap dist:", self.state[0])
-            # print("Race complete perc:", self.state[1])
-            print("Fuel tank capacity:", self.state[1])
-            print("Wheel wear:", self.state[2:6])
-            print("Wheel temp:", self.state[6:10])
-            print("Path wetness:", self.state[10])
-            print("Current step ratio:", self.state[11])
-            print("Last impact ET:", self.state[12])
-            print("Last impact magnitude:", self.state[13])
-            print("Num penalties:", self.state[14])
-            print("Raining:", self.state[15])
-            print("Ambient temp:", self.state[16])
-            print("Track temp:", self.state[17])
-            print("End ET:", self.state[18])
-            print("Dent severity:", self.state[19:27])
-            print("Has last lap:", self.state[27])
-            print("Finish status:", self.state[28])
-            print("Total laps:", self.state[29])
-            print("Sector:", self.state[30])
-            print("Num pitstops:", self.state[31])
-            print("In pits:", self.state[32])
-            print("Tire compound index:", self.state[33])
-            print("Usage multiplier:", self.state[34])
-            print("Changed tires flag:", self.state[35])
-            print("Refueled flag:", self.state[36])
+            # print("Lap dist:", self.state[0])
+            # # print("Race complete perc:", self.state[1])
+            # print("Fuel tank capacity:", self.state[1])
+            # print("Wheel wear:", self.state[2:6])
+            # print("Wheel temp:", self.state[6:10])
+            # print("Path wetness:", self.state[10])
+            # print("Current step ratio:", self.state[11])
+            # print("Last impact ET:", self.state[12])
+            # print("Last impact magnitude:", self.state[13])
+            # print("Num penalties:", self.state[14])
+            # print("Raining:", self.state[15])
+            # print("Ambient temp:", self.state[16])
+            # print("Track temp:", self.state[17])
+            # print("End ET:", self.state[18])
+            # print("Dent severity:", self.state[19:27])
+            # print("Has last lap:", self.state[27])
+            # print("Finish status:", self.state[28])
+            # print("Total laps:", self.state[29])
+            # print("Sector:", self.state[30])
+            # print("Num pitstops:", self.state[31])
+            # print("In pits:", self.state[32])
+            # print("Tire compound index:", self.state[33])
+            # print("Usage multiplier:", self.state[34])
+            # print("Changed tires flag:", self.state[35])
+            # print("Refueled flag:", self.state[36])
 
-            print("-----")
+            # print("-----")
 
-            if len(self.history) == 1600:
-                self.make_plots()
-                self.history = []
-                exit()
+            # if len(self.history) == 7000:
+            #     self.make_plots()
+            #     self.history = []
+            #     exit()
 
 
 

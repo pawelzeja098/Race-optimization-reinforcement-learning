@@ -8,6 +8,9 @@ import torch.optim as optim
 import torch.nn.functional as F
 import random
 import numpy as np
+from torch.distributions import Categorical
+import matplotlib.pyplot as plt
+import pandas as pd
 from collections import deque
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from envs.racing_env import RacingEnv
@@ -46,19 +49,53 @@ class  ActorCritic(nn.Module):
         state_value = self.critic(x)
         return action_probs, state_value
 
-def select_action(model,state):
-    state = torch.tensor(state, dtype=torch.float32).unsqueeze(0)  # [1, obs_dim]
-    action_probs_list, state_value = model(state)  # lista tensorów [1, num_options]
+# def select_action(model,state):
+#     state = torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(device)  # [1, obs_dim]
+#     action_probs_list, state_value = model(state)  # lista tensorów [1, num_options]
+
+#     actions = []
+#     log_probs = []
+
+#     for probs in action_probs_list:
+#         probs = probs.squeeze(0)  # usuń batch dimension -> [num_options]
+#         action = torch.multinomial(probs, num_samples=1).item()
+#         actions.append(action)
+#         log_probs.append(torch.log(probs[action]))
+
+#     return actions, log_probs, state_value
+
+def select_action(model, state):
+    """
+    Poprawnie wybiera akcję, używając obiektu Categorical,
+    aby zapewnić spójność z pętlą 'ppo_update'.
+    """
+    
+    # Przenieś stan na 'device'
+    state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(device)
+
+    # Użyj torch.no_grad() do inferencji (szybciej, oszczędza pamięć)
+    with torch.no_grad():
+        # Model zwraca LISTĘ LOGITÓW i wartość stanu
+        logits_list, state_value = model(state_tensor)
 
     actions = []
     log_probs = []
 
-    for probs in action_probs_list:
-        probs = probs.squeeze(0)  # usuń batch dimension -> [num_options]
-        action = torch.multinomial(probs, num_samples=1).item()
-        actions.append(action)
-        log_probs.append(torch.log(probs[action]))
+    for logits in logits_list:
+        # 1. Stwórz obiekt dystrybucji z logitów
+        #    (squeeze(0) usuwa wymiar batcha)
+        dist = Categorical(logits=logits.squeeze(0))
+        
+        # 2. WYLOSUJ akcję (to jest klucz do EKSPLORACJI)
+        action = dist.sample() # Zwraca tensor, np. tensor(1)
+        
+        # 3. Zapisz akcję jako zwykłą liczbę (dla env.step)
+        actions.append(action.item()) # Np. 1
+        
+        # 4. Zapisz log_prob dla tej wylosowanej akcji
+        log_probs.append(dist.log_prob(action)) # Zwraca tensor, np. tensor(-0.45)
 
+    # Zwraca: listę liczb, listę tensorów, tensor
     return actions, log_probs, state_value
 
 def compute_gae(rewards, values, dones, gamma=0.995, lam=0.95):
@@ -103,32 +140,51 @@ class RolloutBuffer:
     def clear(self):
         self.__init__()
 
-def ppo_update(model, optimizer, buffer, clip_eps=0.2):
+def ppo_update(model, optimizer, buffer, device, clip_eps=0.2):
     """
-    Proximal Policy Optimization (PPO) update step.
-    Clipping the policy update to avoid large updates.
-
+    Poprawiona funkcja PPO update.
     """
-    states = torch.tensor(buffer.states, dtype=torch.float32)
-    old_log_probs = torch.stack(buffer.log_probs)
-    actions = buffer.actions
-    rewards = buffer.rewards
-    values = torch.stack(buffer.values).squeeze()
-    dones = buffer.dones
+    
+    # --- 1. Konwersja danych z bufora na tensory GPU ---
+    
+    states = torch.tensor(np.array(buffer.states), dtype=torch.float32).to(device)
+    
+    # POPRAWKA BŁĘDU 2: Przekonwertuj listę tensorów akcji [tensor([0,1]), ...]
+    # na jeden duży tensor (N_kroków, N_akcji) na GPU
+    actions = torch.stack(buffer.actions).to(device) 
+    
+    old_log_probs = torch.stack(buffer.log_probs).to(device)
+    # values = torch.stack(buffer.values).squeeze().to(device)
+    values = torch.stack(buffer.values).reshape(-1).to(device)
+    
+    
+    # POPRAWKA BŁĘDU 3: Przekonwertuj listę tensorów nagród na listę float
+    rewards_list = [r.item() for r in buffer.rewards]
+    dones_list = buffer.dones
 
-    advantages, returns = compute_gae(rewards, values.tolist(), dones)
-    advantages = torch.tensor(advantages, dtype=torch.float32)
-    returns = torch.tensor(returns, dtype=torch.float32)
+    # --- 2. Obliczenia na CPU (GAE) ---
+    advantages, returns = compute_gae(rewards_list, values.tolist(), dones_list)
+    advantages = torch.tensor(advantages, dtype=torch.float32).to(device)
+    returns = torch.tensor(returns, dtype=torch.float32).to(device)
 
-    # Forward pass
-    action_probs, values_new = model(states)
+    # --- 3. Forward pass i obliczenie strat ---
+    
+    # action_probs to lista [tensor_dist_pit, tensor_dist_opony]
+    action_probs, values_new = model(states) 
 
     # Oblicz log_probs dla MultiDiscrete
     log_probs_new = []
     for i, probs in enumerate(action_probs):
         dist = torch.distributions.Categorical(probs)
-        acts = torch.tensor([a[i] for a in actions])
+        
+        # POPRAWKA BŁĘDU 1: Użyj "krojonego" tensora 'actions' z GPU
+        # 'actions' ma kształt (N_kroków, N_akcji)
+        # 'acts' będzie miało kształt (N_kroków,)
+        acts = actions[:, i] 
+        
+        # dist (GPU) i acts (GPU) są teraz na tym samym urządzeniu
         log_probs_new.append(dist.log_prob(acts))
+        
     log_probs_new = torch.stack(log_probs_new).sum(dim=0)
 
     # PPO ratio
@@ -136,21 +192,26 @@ def ppo_update(model, optimizer, buffer, clip_eps=0.2):
     surr1 = ratio * advantages
     surr2 = torch.clamp(ratio, 1-clip_eps, 1+clip_eps) * advantages
 
-    actor_loss = -torch.min(surr1, surr2).mean()  # polityka
-    critic_loss = F.mse_loss(values_new.squeeze(), returns)  # Critic
+    actor_loss = -torch.min(surr1, surr2).mean()
+    critic_loss = F.mse_loss(values_new.squeeze(), returns)
     loss = actor_loss + 0.5 * critic_loss
 
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
+    
+    # Zwróć straty do logowania
+    return actor_loss.item(), critic_loss.item()
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 env = RacingEnv()
 state_dim = env.observation_space.shape[0]
-model = ActorCritic(state_dim, env.action_space)
+model = ActorCritic(state_dim, env.action_space).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
 buffer = RolloutBuffer()
-
-num_epochs = 1000
+all_total_rewards = []
+num_epochs = 200
 # steps_per_epoch = 200 # Ta zmienna nie jest używana w tej logice
 
 for epoch in range(num_epochs):
@@ -164,16 +225,24 @@ for epoch in range(num_epochs):
         actions, log_prob, value = select_action(model, obs)
         
         # Wykonaj akcję. 
-        # Zmieniono env.step(actions, obs) na env.step(actions)
-        # Środowisko samo śledzi swój stan (obs), nie trzeba go podawać.
         next_obs, reward, done, _ = env.step(actions, obs)
 
         # --- POPRAWKA 2: Zapisuj 'obs' (stan s_t) ---
         buffer.states.append(obs) 
         # ---------------------------------------------
 
-        buffer.actions.append(actions)
-        buffer.log_probs.append(log_prob)
+        if isinstance(actions, list):
+            # Połącz listę tensorów akcji w jeden tensor [0, 1]
+            actions_tensor = torch.tensor(actions) 
+            # Zsumuj log-prawdopodobieństwa dla wspólnej akcji
+            log_prob_tensor = sum(log_prob)
+        else:
+            # Jeśli to nie lista, po prostu użyj wartości
+            actions_tensor = actions
+            log_prob_tensor = log_prob
+
+        buffer.actions.append(actions_tensor)
+        buffer.log_probs.append(log_prob_tensor)
         buffer.values.append(value)
         buffer.rewards.append(torch.tensor(reward, dtype=torch.float32))
         buffer.dones.append(done)
@@ -188,16 +257,36 @@ for epoch in range(num_epochs):
     # Koniec epizodu (rolloutu)
     
     # PPO update po zebraniu danych z całego epizodu
-    ppo_update(model, optimizer, buffer)
+    ppo_update(model, optimizer, buffer, device)
+    total_reward = sum([r.item() for r in buffer.rewards])
+    all_total_rewards.append(total_reward)
     
-    if epoch % 10 == 0:
-        total_reward = sum([r.item() for r in buffer.rewards])
-        print(f"Epoch {epoch}, total reward {total_reward}")
+    # if epoch % 10 == 0:
+        
+    print(f"Epoch {epoch}, total reward {total_reward}")
+    print(buffer.actions)
     
     # Wyczyść bufor po aktualizacji, gotowy na nową epokę
     buffer.clear()
 
 
+print("Trening zakończony. Rysowanie wykresu nagrody...")
+
+plt.figure(figsize=(12, 6))
+plt.plot(all_total_rewards, label='Całkowita nagroda (Surowa)')
+
+# --- (Opcjonalnie, ale BARDZO ZALECANE) Wygładzony wykres ---
+# Nagrody w RL bardzo "skaczą". Średnia krocząca pokazuje prawdziwy trend.
+rolling_avg = pd.Series(all_total_rewards).rolling(window=50).mean() # Średnia z 50 epok
+plt.plot(rolling_avg, label='Średnia krocząca (wygładzona)', color='red', linewidth=2)
+# -----------------------------------------------------------
+
+plt.title('Postęp Uczenia Modelu RL (Nagroda na Epokę)')
+plt.xlabel('Epoka')
+plt.ylabel('Całkowita Nagroda')
+plt.legend()
+plt.grid(True)
+plt.show()
 
 # env = RacingEnv()
 

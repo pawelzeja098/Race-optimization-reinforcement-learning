@@ -12,7 +12,7 @@ import numpy as np
 # mDentSeverity[6]: min=0.0, max=0.0
 # mDentSeverity[7]: min=0.0, max=2.0
 
-def random_impact_magnitude(prob_impact = 0.0000001): #real is 0.01
+def random_impact_magnitude(prob_impact = 0.001): #real is 0.01
 
     if np.random.rand() > prob_impact:
         return 0.0
@@ -78,7 +78,7 @@ def generate_dent_severity(impact_magnitude,dent_severity_current):
     for i in elements_to_damage:
         if i == 2 or i == 6:
             continue  # te elementy się nie uszkadzają
-        if np.random.rand() < elem_damage_prob:  # szansa na uszkodzenie tego elementu
+        if np.random.rand() > elem_damage_prob:  # szansa na uszkodzenie tego elementu
             continue
         else:
             if dent_severity_current[i] < 2.0:
