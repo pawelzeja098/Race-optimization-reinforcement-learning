@@ -101,14 +101,18 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
         # if data_saved_telemetry >= data_saved_scoring:
         #     break
         # data_saved_telemetry += 1
-        wanted_keys = ["mFuel", "mFuelCapacity","mWheel","mDentSeverity","mFrontTireCompoundIndex","mCurrentSector","mLapNumber","mLastImpactET","mLastImpactMagnitude","multiplier"]
+        wanted_keys = ["mFuel", "mFuelCapacity","mWheel","mDentSeverity","mFrontTireCompoundIndex","mCurrentSector","mLapNumber","mLastImpactET","mLastImpactMagnitude","multiplier","is_repairing"]
+        vehicle = raw_data_scoring[curr_tel].get("mVehicles")
+
+        if vehicle[0]["mInPits"] is True:
+            print("Distance in lap during pitstop:", vehicle[0]["mLapDist"], "at telemetry record:", telemetry_records_len)
 
         if entry["mWheel"][0]["mWear"] > raw_data_telemetry[curr_tel-1]["mWheel"][0]["mWear"] and curr_tel > 0:
             vehicle = raw_data_scoring[curr_tel].get("mVehicles")
             wear_diff = entry["mWheel"][0]["mWear"] - raw_data_telemetry[curr_tel-1]["mWheel"][0]["mWear"]
             wear_diff1 = entry["mWheel"][1]["mWear"] - raw_data_telemetry[curr_tel-1]["mWheel"][1]["mWear"]
             if vehicle[0]["mInPits"] is True:
-                # print("Zmiana opon 0 wykryta, w stepie:", telemetry_records_len)
+                print("Zmiana opon 0 wykryta, w stepie:", telemetry_records_len)
                 # print(entry["mWheel"][0]["mWear"])
                 skonczone_w_step = telemetry_records_len
 
@@ -134,13 +138,14 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
         FUEL_THRESHOLD = 0.01
         if entry["mFuel"] > raw_data_telemetry[curr_tel-1]["mFuel"] + FUEL_THRESHOLD and curr_tel > 0:
             vehicle = raw_data_scoring[curr_tel].get("mVehicles")
+
             
             
             # print(f"Fuel level: {entry['mFuel']} at ET {vehicle[0]['mTotalLaps']}, {telemetry_records_len} record")
             if vehicle[0]["mInPits"] is True:
                 # refueled_flag = True
                 refueled_amount = entry["mFuel"] - raw_data_telemetry[curr_tel-1]["mFuel"]
-                # print(f"Refueled {round(refueled_amount,5)} liters at ET {vehicle[0]['mTotalLaps']}, {telemetry_records_len} record")
+                print(f"Refueled {round(refueled_amount,5)} liters at ET {vehicle[0]['mTotalLaps']}, {telemetry_records_len} record")
                 skonczone_w_step = telemetry_records_len
                 # print(f"Refueled at ET {vehicle[0]['mTotalLaps']}, {telemetry_records_len} record")
             # changed_tires_flag = True

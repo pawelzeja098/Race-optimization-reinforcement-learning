@@ -67,13 +67,13 @@ class RacingEnv(gym.Env):
         self.checked_pit = False
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.state = None
-        self.scaler_X = joblib.load("models/scaler1_X.pkl")
-        self.scaler_Y = joblib.load("models/scaler1_Y.pkl")
+        self.scaler_X = joblib.load("models/scaler3_X.pkl")
+        self.scaler_Y = joblib.load("models/scaler3_Y.pkl")
         self.h_c = None
         self.lap_checked = False
 
         self.LSTM_model = LSTMStatePredictor(input_size=39, hidden_size=256, output_size=12, num_layers=1).to(device)
-        self.LSTM_model.load_state_dict(torch.load("models/lstm1_model.pth", map_location=device))
+        self.LSTM_model.load_state_dict(torch.load("models/lstm3_model.pth", map_location=device))
         self.LSTM_model.eval()
         # self.curr_window = deque(maxlen=30)
 
@@ -351,7 +351,7 @@ class RacingEnv(gym.Env):
             self.tire_compound_index,
             self.usage_multiplier,
             self.changed_tires_flag,
-            self.refueled_flag,
+            # self.refueled_flag,
             self.is_repairing
         ], dtype=np.float32)
 
@@ -389,6 +389,7 @@ class RacingEnv(gym.Env):
                 self.num_pit_stops,
                 self.tire_compound_index,
                 self.usage_multiplier
+                
             ], dtype=np.float32)
 
 
@@ -465,6 +466,9 @@ class RacingEnv(gym.Env):
         """One step of the environment's dynamics.(NOT ONE LAP)"""
         prev_sector = self.sector
         reward = 0.0
+        gap_between_tires = 0
+
+        repair_weights = [20, 20, 30, 30, 60, 30, 30, 20]
         while True:
             # if (prev_sector == 2.0 and self.sector == 0.0) or (prev_sector == 1.0 and self.sector == 2.0) or self.finish_status == 1.0:
             if (prev_sector == 0.0 and self.sector == 1.0) or self.finish_status == 1.0:
@@ -578,36 +582,66 @@ class RacingEnv(gym.Env):
             
             # Check if in pits and handle pit stop actions
             if action[0] == 1 and self.laps > 1:
-                self.h_c = None  # Reset LSTM hidden and cell states
+                # self.h_c = None  # Reset LSTM hidden and cell states
                 if (pit_entry_line_dist <= data_lstm[0] <= 1.01 or 0 <= data_lstm[0] <= pit_exit_line_dist) and self.laps != 0:
                     self.in_pits = 1.0
                     if not self.checked_pit:
                         self.checked_pit = True
                     self.changed_tires_flag = 0.0
-                    self.refueled_flag = 0.0
+                    # self.refueled_flag = 0.0
+                    # if action[1] > 0 and changed_tires_in_pit:
+
                 else:
+                    if self.in_pits == 1.0:
+                        self.num_pit_stops += 1.0
+                        self.in_pits = 0.0
                     self.in_pits = 0.0
                     self.checked_pit = False
                     self.pitted = False
+                    changed_tires_in_pit = False
                 
-                if self.in_pits == 1.0:
-                    a = 0
                     
                 if data_lstm[0] > 80.0/lap_dist_max and self.in_pits == 1.0 and not self.pitted:
-                    if action[1] > 0:  # Tire change
+                    if action[1] > 0 and not changed_tires_in_pit:  # Tire change
                         self.tire_compound_index = action[1] - 1.0
                         self.changed_tires_flag = 1.0
-                    if action[3] * 0.05 > self.fuel_tank_capacity:  # Refuel
+                        gap_between_tires = 8
+                        changed_tires_in_pit = True
+                    
+                    if action[3] * 0.05 >= self.fuel_tank_capacity:  # Refuel
+                        if gap_between_tires > 0:
+                            
+                            waiting_for_fuel = True
                         # self.fuel_tank_capacity = min(action[3] * 0.05, self.fuel_tank_capacity)
-
+                        else:
                         # self.refueled_flag = 1.0
-                        self.refueled_amount = max(1.6001, action[3] * 0.05 - self.fuel_tank_capacity)
-                    if action[2] == 1:
-                        for i in range(len(self.dent_severity)):
-                            self.dent_severity[i] = 0.0
-                    self.pitted = True
-                    self.num_pit_stops += 1.0
-                
+                            waiting_for_fuel = False
+                            self.refueled_amount = max(max(1.6001, action[3] * 0.05 - self.fuel_tank_capacity), 0)
+                    if action[2] == 1 and not waiting_for_fuel and any(self.dent_severity > 0.0): # Repair
+                        if gap_between_tires > 0 or self.refueled_amount > 0.0:
+                            continue
+                        else:
+                            if self.is_repairing == 0.0:
+                                for i in range(len(self.dent_severity)):
+                                    if self.dent_severity[i] > 0.0:
+                                        repair_time += repair_weights[i]
+                                
+                            if repair_time > 0:
+                                self.is_repairing = 1.0
+                                repair_time -= 1
+                            else:    
+                                self.is_repairing = 0.0
+                                for i in range(len(self.dent_severity)):
+                                    self.dent_severity[i] = 0.0
+                    if gap_between_tires > 0:
+                        gap_between_tires -= 1
+                    # self.pitted = True
+                    # self.num_pit_stops += 1.0
+            else:
+                self.in_pits = 0.0
+                self.checked_pit = False
+                self.pitted = False
+                changed_tires_in_pit = False
             
             # impact_magnitude = random_impact_magnitude()
             # if impact_magnitude > 0.0:
@@ -687,7 +721,8 @@ class RacingEnv(gym.Env):
                 self.tire_compound_index,
                 self.usage_multiplier,
                 self.changed_tires_flag,
-                self.refueled_flag
+                # self.refueled_flag
+                self.is_repairing
             ], dtype=np.float32)
 
             # self.curr_window.append(self.state)
