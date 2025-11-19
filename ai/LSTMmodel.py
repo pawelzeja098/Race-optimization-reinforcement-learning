@@ -15,6 +15,7 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.metrics import mean_squared_error, r2_score
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+from config import X_SHAPE, Y_SHAPE, CONT_LENGTH, CAT_LENGTH
 
 
 
@@ -70,8 +71,8 @@ class LSTMStatePredictor(nn.Module):
 
 def create_scalers(X,Y):
 
-    cont_indices_x = slice(0, 19)   # continuous columns for X (0–18)
-    cont_indices_y = slice(0, 12)   # continuous columns for Y (0–11)
+    cont_indices_x = slice(0, CONT_LENGTH)   # continuous columns for X (0–18)
+    cont_indices_y = slice(0, Y_SHAPE)   # continuous columns for Y (0–11)
 
     # Scale continuous features
     flat_x = np.vstack([x[:, cont_indices_x] for x in X])
@@ -85,8 +86,8 @@ def create_scalers(X,Y):
     return scaler_X, scaler_Y
 
 def scale_input(X, Y, scaler_X, scaler_Y):
-    cont_indices_x = slice(0, 19)   # continuous columns for X
-    cont_indices_y = slice(0, 12)   # continuous columns for Y
+    cont_indices_x = slice(0, CONT_LENGTH)   # continuous columns for X
+    cont_indices_y = slice(0, Y_SHAPE)   # continuous columns for Y
 
     X_scaled_grouped = []
     Y_scaled_grouped = []
@@ -121,8 +122,8 @@ def scale_single_input(raw_vector_x, scaler_x_cont):
     Skaluje pojedynczy wektor (37,), stosując scaler tylko do 
     części ciągłej (0-19) i zostawiając kategorialną (20-36).
     """
-    cont_indices_x = slice(0, 20)
-    cat_indices_x = slice(20, 39)
+    cont_indices_x = slice(0, CONT_LENGTH)
+    cat_indices_x = slice(CONT_LENGTH, X_SHAPE)
     
     # raw_vector_x[cont_indices_x] ma kształt (19,)
     # Musimy go przekształcić na (1, 19) dla scalera
@@ -138,21 +139,21 @@ def scale_single_input(raw_vector_x, scaler_x_cont):
     return np.hstack([x_cont_scaled, x_cat]).flatten()
        
 
-def create_window_pred(sequence_x, window_size, n_steps_ahead=5):
-    X, Y = [], []
-    sequence_x = np.array(sequence_x)
-    curr_len = len(sequence_x)
+# def create_window_pred(sequence_x, window_size, n_steps_ahead=5):
+#     X, Y = [], []
+#     sequence_x = np.array(sequence_x)
+#     curr_len = len(sequence_x)
 
-    start = max(0, curr_len - window_size)
-    window = sequence_x[start:curr_len]
+#     start = max(0, curr_len - window_size)
+#     window = sequence_x[start:curr_len]
 
-    pad_len = window_size - len(window)
-    if pad_len > 0:
-        window = np.vstack([np.zeros((pad_len, sequence_x.shape[1])), window])
+#     pad_len = window_size - len(window)
+#     if pad_len > 0:
+#         window = np.vstack([np.zeros((pad_len, sequence_x.shape[1])), window])
 
-    # dodaj batch dimension
-    X = window[np.newaxis, :, :]  # shape [1, window_size, num_features]
-    return X
+#     # dodaj batch dimension
+#     X = window[np.newaxis, :, :]  # shape [1, window_size, num_features]
+#     return X
 
 
 
@@ -175,9 +176,9 @@ def generate_predictions(model, input_seq,scaler_X=None, scaler_Y=None,h_c=None)
     
          
     with torch.no_grad():
-        input_tensor = torch.tensor(input_seq, dtype=torch.float32).reshape(1, 1, 39).to(device)
+        input_tensor = torch.tensor(input_seq, dtype=torch.float32).reshape(1, 1, X_SHAPE).to(device)
         predictions , h_c = model(input_tensor, h_c)
-        predictions = predictions.cpu().numpy().reshape(1, 12)
+        predictions = predictions.cpu().numpy().reshape(1, Y_SHAPE)
         
         predictions = scaler_Y.inverse_transform(predictions)
         return predictions.flatten(), h_c
@@ -213,8 +214,8 @@ def create_x_y(data):
     for race in data:
         X_seq, Y_seq = [], []
         for i in range(len(race) - 1):
-            X_seq.append(race[i][:-2])
-            Y_seq.append(race[i + 1][:-29]) 
+            X_seq.append(race[i])
+            Y_seq.append(race[i + 1][:Y_SHAPE])  # Y to pierwsze 12 cech
         
         # dodajemy każdy wyścig osobno
         X_grouped.append(np.array(X_seq, dtype=float))
@@ -390,4 +391,4 @@ def train_model():
 
     print("✅ Model saved to models/lstm3_model.pth")
 
-train_model()
+# train_model()

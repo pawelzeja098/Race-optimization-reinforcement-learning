@@ -317,8 +317,8 @@ def extract_state(telem_file_raw, scoring_file_raw):
                 # telemetry["refueled_flag"],
 
                 #ciągłe nie używane do trenowania
-                last_lap,
-                best_lap,
+                # last_lap,
+                # best_lap,
                 
                 
         ]
