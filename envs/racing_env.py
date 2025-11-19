@@ -52,14 +52,15 @@ class RacingEnv(gym.Env):
         self.tire_compound_index = 0.0
         self.changed_tires_flag = 0.0
         self.refueled_flag = 0.0
-        self.usage_multiplier = 1.0
+        self.usage_multiplier = 3.0
         self.prev_et = 0.0
         self.curr_step = 0
-        self.total_steps = 3200
+        self.total_steps = 5000
         self.impact_flag = 0.0
         self.pitted = False
         self.delta = 0.0
-
+        self.num_race = 0
+        self.is_repairing = 0.0
         self.weather_conditions = generate_weather_conditions(self.total_steps)
         
         self.laps = 0
@@ -71,7 +72,7 @@ class RacingEnv(gym.Env):
         self.h_c = None
         self.lap_checked = False
 
-        self.LSTM_model = LSTMStatePredictor(input_size=38, hidden_size=256, output_size=12, num_layers=1).to(device)
+        self.LSTM_model = LSTMStatePredictor(input_size=39, hidden_size=256, output_size=12, num_layers=1).to(device)
         self.LSTM_model.load_state_dict(torch.load("models/lstm1_model.pth", map_location=device))
         self.LSTM_model.eval()
         # self.curr_window = deque(maxlen=30)
@@ -109,6 +110,80 @@ class RacingEnv(gym.Env):
         # self.state = self._extract_state(self.telemetry_data[0], self.scoring_data[0])
         
         
+#         self.observation_space = gym.spaces.Box(
+#     low=np.array([
+#         0.0,   # Lap Dist
+#         # 0.0,   # Race complete %
+#         0.0,   # Tank capacity
+#         0.0,   # Wheel wear
+#         0.0,   # Wheel wear
+#         0.0,   # Wheel wear
+#         0.0,   # Wheel wear
+#         0.0,   # Wheel temperature
+#         0.0,   # Wheel temperature
+#         0.0,   # Wheel temperature
+#         0.0,   # Wheel temperature
+#         0.0,   # Path wetness
+#         0.0,   # Current step ratio
+#         # 0.0,   # Last impact ET
+#         0.0,   # Last impact magnitude
+#         0.0,   # Number of penalties
+#         0.0,   # Raining
+#         0.0,   # Ambient temp
+#         0.0,   # Track temp
+#         0.0,   # End ET
+#         0.0,   # Impact flag
+#         0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  # dent severities
+#         0.0,   # #has last lap
+#         0.0,   # Finish status
+#         0.0,   # Total laps
+#         0.0,   # Sector
+#         0.0,   # Num pitstops
+#         0.0,   # In pits
+#         0.0,   # tire compound index
+#         0.0,   # changed tires flag
+#         0.0,   # refueled flag
+#         1.0    # multiplier
+
+#     ], dtype=np.float32),
+#     high=np.array([
+#         1.2,     # Lap Dist
+#         # 2.0,     # Race complete %
+#         1.1,     # Tank capacity
+#         1.0,     # Wheel wear
+#         1.0,     # Wheel wear
+#         1.0,     # Wheel wear
+#         1.0,     # Wheel wear
+#         600.0,   # Wheel temperature
+#         600.0,   # Wheel temperature
+#         600.0,   # Wheel temperature
+#         600.0,   # Wheel temperature
+#         1.0,    # Path wetness
+#         1.0,    # Current step ratio
+#         # 86500.0,   # Last impact ET
+#         25000.0,     # Last impact magnitude
+#         100.0,   # Number of penalties
+#         1.0,   # Raining
+#         45.0,   # Ambient temp
+#         60.0,   # Track temp
+#         86500.0,   # End ET
+#         1.0,   # Impact flag
+#         2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0,  # dent severities
+#         1.0,   # #has last lap
+#         1.0,   # Finish status
+#         500.0,   # Total laps
+#         2.0,   # Sector
+#         100.0,   # Num pitstops
+#         1.0,   # In pits
+#         3.0,    # tire compound index
+#         1.0,    # changed tires flag
+#         1.0,    # refueled flag
+#         1.0    # multiplier
+#     ], dtype=np.float32),
+#     dtype=np.float32
+# )
+        
+        #New obs space including only data aviable directly from simulator. 
         self.observation_space = gym.spaces.Box(
     low=np.array([
         0.0,   # Lap Dist
@@ -123,30 +198,24 @@ class RacingEnv(gym.Env):
         0.0,   # Wheel temperature
         0.0,   # Wheel temperature
         0.0,   # Path wetness
-        0.0,   # Current step ratio
         # 0.0,   # Last impact ET
-        0.0,   # Last impact magnitude
         0.0,   # Number of penalties
         0.0,   # Raining
         0.0,   # Ambient temp
         0.0,   # Track temp
         0.0,   # End ET
-        0.0,   # Impact flag
         0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  # dent severities
         0.0,   # #has last lap
         0.0,   # Finish status
         0.0,   # Total laps
         0.0,   # Sector
         0.0,   # Num pitstops
-        0.0,   # In pits
         0.0,   # tire compound index
-        0.0,   # changed tires flag
-        0.0,   # refueled flag
         1.0    # multiplier
 
     ], dtype=np.float32),
     high=np.array([
-        1.2,     # Lap Dist
+        1.2,     # Lap Dist   
         # 2.0,     # Race complete %
         1.1,     # Tank capacity
         1.0,     # Wheel wear
@@ -158,25 +227,19 @@ class RacingEnv(gym.Env):
         600.0,   # Wheel temperature
         600.0,   # Wheel temperature
         1.0,    # Path wetness
-        1.0,    # Current step ratio
         # 86500.0,   # Last impact ET
-        25000.0,     # Last impact magnitude
         100.0,   # Number of penalties
         1.0,   # Raining
         45.0,   # Ambient temp
         60.0,   # Track temp
         86500.0,   # End ET
-        1.0,   # Impact flag
         2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0,  # dent severities
         1.0,   # #has last lap
         1.0,   # Finish status
-        500.0,   # Total laps
+        400.0,   # Total laps
         2.0,   # Sector
         100.0,   # Num pitstops
-        1.0,   # In pits
         3.0,    # tire compound index
-        1.0,    # changed tires flag
-        1.0,    # refueled flag
         1.0    # multiplier
     ], dtype=np.float32),
     dtype=np.float32
@@ -228,6 +291,7 @@ class RacingEnv(gym.Env):
         self.changed_tires_flag = 0.0
         self.refueled_flag = 0.0
         self.h_c = None
+        self.is_repairing = 0.0
 
         # weather_conditions = generate_weather_conditions(1)
 
@@ -236,7 +300,7 @@ class RacingEnv(gym.Env):
         self.ambient_temp = weather_start["mAmbientTemp"]
         self.track_temp = weather_start["mTrackTemp"]
 
-        self.end_et = 1464.0
+        self.end_et = 1933.0
         # self.race_complete_perc = 126.0 / self.end_et #Approxed delta for driving to start line(126s)
         
         self.curr_step = 0
@@ -244,7 +308,7 @@ class RacingEnv(gym.Env):
         self.step_delta = 1/self.total_steps
         
         self.lap = 0
-        self.usage_multiplier = 1.0
+        
         self.impact_flag = 0.0
         # self.state = self._extract_state(self.telemetry_data[0], self.scoring_data[0])
 
@@ -287,13 +351,48 @@ class RacingEnv(gym.Env):
             self.tire_compound_index,
             self.usage_multiplier,
             self.changed_tires_flag,
-            self.refueled_flag
+            self.refueled_flag,
+            self.is_repairing
         ], dtype=np.float32)
 
         # self.curr_window.append(self.state)
 
+        obs = np.array([
+                self.lap_dist,
+                self.fuel_tank_capacity,
+                self.wheel1_wear,
+                self.wheel2_wear,
+                self.wheel3_wear,
+                self.wheel4_wear,
+                self.wheel1_temp,
+                self.wheel2_temp,
+                self.wheel3_temp,
+                self.wheel4_temp,
+                self.path_wetness,
+                self.num_penalties,
+                self.raining,
+                self.ambient_temp,
+                self.track_temp,
+                self.end_et,
+                self.dent_severity[0],
+                self.dent_severity[1],
+                self.dent_severity[2],
+                self.dent_severity[3],
+                self.dent_severity[4],
+                self.dent_severity[5],
+                self.dent_severity[6],
+                self.dent_severity[7],
+                self.has_last_lap,
+                self.finish_status,
+                self.laps,
+                self.sector,
+                self.num_pit_stops,
+                self.tire_compound_index,
+                self.usage_multiplier
+            ], dtype=np.float32)
 
-        return self.state
+
+        return obs
     
     def start_configuration(self,action):
         self.tire_compound_index = action[1] - 1.0
@@ -341,7 +440,7 @@ class RacingEnv(gym.Env):
         if self.sector == 0.0:
             lap_time = self.end_et * self.race_complete_perc
         elif self.sector == 1.0:
-            last_race_state = last_step[11]
+            last_race_state = last_step
             curr_race_state = self.curr_step/self.total_steps
             curr_delta = curr_race_state - last_race_state
             reward = (curr_delta - self.delta) * 100.0
@@ -381,7 +480,7 @@ class RacingEnv(gym.Env):
                 break
             
             # possible_power_settings = [0.5,0.6,0.7,0.8,0.9,1]
-            
+            self.refueled_amount = 0.0
             done = False
             data_lstm = [] # there will be data from LSTM model
 
@@ -447,6 +546,8 @@ class RacingEnv(gym.Env):
             #Check if max steps reached
             if self.curr_step >= self.total_steps:
                 done = True
+                reward += 100.0
+                reward += 50000 * self.laps / self.total_steps
                 self.make_plots()
                 self.history = []
                 break
@@ -470,12 +571,14 @@ class RacingEnv(gym.Env):
             if self.fuel_tank_capacity <= 0.1:
                 done = True
                 reward = -100.0
+                
                 self.make_plots()
                 self.history = []
                 break
             
             # Check if in pits and handle pit stop actions
             if action[0] == 1 and self.laps > 1:
+                self.h_c = None  # Reset LSTM hidden and cell states
                 if (pit_entry_line_dist <= data_lstm[0] <= 1.01 or 0 <= data_lstm[0] <= pit_exit_line_dist) and self.laps != 0:
                     self.in_pits = 1.0
                     if not self.checked_pit:
@@ -495,8 +598,10 @@ class RacingEnv(gym.Env):
                         self.tire_compound_index = action[1] - 1.0
                         self.changed_tires_flag = 1.0
                     if action[3] * 0.05 > self.fuel_tank_capacity:  # Refuel
-                        self.fuel_tank_capacity = min(action[3] * 0.05, self.fuel_tank_capacity)
-                        self.refueled_flag = 1.0
+                        # self.fuel_tank_capacity = min(action[3] * 0.05, self.fuel_tank_capacity)
+
+                        # self.refueled_flag = 1.0
+                        self.refueled_amount = max(1.6001, action[3] * 0.05 - self.fuel_tank_capacity)
                     if action[2] == 1:
                         for i in range(len(self.dent_severity)):
                             self.dent_severity[i] = 0.0
@@ -628,10 +733,45 @@ class RacingEnv(gym.Env):
 
             # print(self.state)
 
-        return self.state, reward, done, {}
+            obs = np.array([
+                self.lap_dist,
+                self.fuel_tank_capacity,
+                self.wheel1_wear,
+                self.wheel2_wear,
+                self.wheel3_wear,
+                self.wheel4_wear,
+                self.wheel1_temp,
+                self.wheel2_temp,
+                self.wheel3_temp,
+                self.wheel4_temp,
+                self.path_wetness,
+                self.num_penalties,
+                self.raining,
+                self.ambient_temp,
+                self.track_temp,
+                self.end_et,
+                self.dent_severity[0],
+                self.dent_severity[1],
+                self.dent_severity[2],
+                self.dent_severity[3],
+                self.dent_severity[4],
+                self.dent_severity[5],
+                self.dent_severity[6],
+                self.dent_severity[7],
+                self.has_last_lap,
+                self.finish_status,
+                self.laps,
+                self.sector,
+                self.num_pit_stops,
+                self.tire_compound_index,
+                self.usage_multiplier
+            ], dtype=np.float32)
+
+        return obs, reward, done, self.state[11], {}
 
 
     def make_plots(self):
+        self.num_race +=1
         history_array = np.array(self.history)
         
         # Utworzenie większej figury dla wszystkich wykresów
@@ -869,8 +1009,10 @@ class RacingEnv(gym.Env):
         plt.grid(True)
 
         plt.tight_layout()
-        plt.savefig('race_history_plots.png', dpi=150)
-        plt.show()
+        plt.savefig(f'ai/rl_training_race_historyplots/race_history_plots_{self.num_race}.png', dpi=150)
+        # plt.show()
+        plt.close(fig)
+        
 
 
 

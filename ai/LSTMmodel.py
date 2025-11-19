@@ -121,8 +121,8 @@ def scale_single_input(raw_vector_x, scaler_x_cont):
     Skaluje pojedynczy wektor (37,), stosując scaler tylko do 
     części ciągłej (0-19) i zostawiając kategorialną (20-36).
     """
-    cont_indices_x = slice(0, 19)
-    cat_indices_x = slice(19, 38)
+    cont_indices_x = slice(0, 20)
+    cat_indices_x = slice(20, 39)
     
     # raw_vector_x[cont_indices_x] ma kształt (19,)
     # Musimy go przekształcić na (1, 19) dla scalera
@@ -130,7 +130,7 @@ def scale_single_input(raw_vector_x, scaler_x_cont):
     
     # raw_vector_x[cat_indices_x] ma kształt (18,)
     # --- POPRAWKA TUTAJ ---
-    # Musimy go przekształcić na (1, 18), aby pasował do hstack
+    # Musimy go przekształcić na (1, 19), aby pasował do hstack
     x_cat = raw_vector_x[cat_indices_x].reshape(1, -1)
     
     # Teraz łączymy (1, 19) z (1, 18) -> (1, 37)
@@ -175,7 +175,7 @@ def generate_predictions(model, input_seq,scaler_X=None, scaler_Y=None,h_c=None)
     
          
     with torch.no_grad():
-        input_tensor = torch.tensor(input_seq, dtype=torch.float32).reshape(1, 1, 38).to(device)
+        input_tensor = torch.tensor(input_seq, dtype=torch.float32).reshape(1, 1, 39).to(device)
         predictions , h_c = model(input_tensor, h_c)
         predictions = predictions.cpu().numpy().reshape(1, 12)
         
@@ -214,7 +214,7 @@ def create_x_y(data):
         X_seq, Y_seq = [], []
         for i in range(len(race) - 1):
             X_seq.append(race[i][:-2])
-            Y_seq.append(race[i + 1][:-28]) 
+            Y_seq.append(race[i + 1][:-29]) 
         
         # dodajemy każdy wyścig osobno
         X_grouped.append(np.array(X_seq, dtype=float))
@@ -289,7 +289,7 @@ def train_model():
 
     lr = 1e-4
     batch_size = 128
-    num_epochs = 40
+    num_epochs = 85
     weight = [0.5, 1.8, 3.0, 0.1, 1.5]
    
 
@@ -383,11 +383,11 @@ def train_model():
         avg_train_loss = total_train_loss / len(train_loader)
         scheduler.step(avg_train_loss)
         print(f"Epoch {epoch+1}/{num_epochs}, Train Loss: {avg_train_loss:.4f}")
-    torch.save(model.state_dict(), "models/lstm1_model.pth")
+    torch.save(model.state_dict(), "models/lstm3_model.pth")
     import joblib
-    joblib.dump(scaler_X, "models/scaler1_X.pkl")
-    joblib.dump(scaler_Y, "models/scaler1_Y.pkl")
+    joblib.dump(scaler_X, "models/scaler3_X.pkl")
+    joblib.dump(scaler_Y, "models/scaler3_Y.pkl")
 
-    print("✅ Model saved to models/lstm1_model.pth")
+    print("✅ Model saved to models/lstm3_model.pth")
 
-# train_model()
+train_model()

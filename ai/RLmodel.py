@@ -211,7 +211,8 @@ model = ActorCritic(state_dim, env.action_space).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
 buffer = RolloutBuffer()
 all_total_rewards = []
-num_epochs = 200
+num_epochs = 250
+last_step = 0
 # steps_per_epoch = 200 # Ta zmienna nie jest używana w tej logice
 
 for epoch in range(num_epochs):
@@ -225,7 +226,7 @@ for epoch in range(num_epochs):
         actions, log_prob, value = select_action(model, obs)
         
         # Wykonaj akcję. 
-        next_obs, reward, done, _ = env.step(actions, obs)
+        next_obs, reward, done, last_step, _ = env.step(actions, last_step)
 
         # --- POPRAWKA 2: Zapisuj 'obs' (stan s_t) ---
         buffer.states.append(obs) 

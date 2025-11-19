@@ -45,6 +45,7 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
         time_start = vehicle[0]["mTimeIntoLap"]
         if (time_start < 0 or not start_lights_flag) and not start_flag:
             data_before_start += 1
+
             
             continue
         start_lights_flag = False
@@ -87,11 +88,13 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
     data_saved_telemetry = 0
     curr_tel = 0
     for entry in raw_data_telemetry:
+        refueled_amount = 0.0
         changed_tires_flag = False
         refueled_flag = False
 
         if count_before_start < data_before_start:
             count_before_start += 1
+            curr_tel += 1
             continue
         if telemetry_records_len >= scoring_records_len:
             break
@@ -100,22 +103,73 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
         # data_saved_telemetry += 1
         wanted_keys = ["mFuel", "mFuelCapacity","mWheel","mDentSeverity","mFrontTireCompoundIndex","mCurrentSector","mLapNumber","mLastImpactET","mLastImpactMagnitude","multiplier"]
 
-        if entry["mWheel"][0]["mWear"] > raw_data_telemetry[curr_tel-1]["mWheel"][0]["mWear"]:
+        if entry["mWheel"][0]["mWear"] > raw_data_telemetry[curr_tel-1]["mWheel"][0]["mWear"] and curr_tel > 0:
             vehicle = raw_data_scoring[curr_tel].get("mVehicles")
+            wear_diff = entry["mWheel"][0]["mWear"] - raw_data_telemetry[curr_tel-1]["mWheel"][0]["mWear"]
+            wear_diff1 = entry["mWheel"][1]["mWear"] - raw_data_telemetry[curr_tel-1]["mWheel"][1]["mWear"]
             if vehicle[0]["mInPits"] is True:
+                # print("Zmiana opon 0 wykryta, w stepie:", telemetry_records_len)
+                # print(entry["mWheel"][0]["mWear"])
+                skonczone_w_step = telemetry_records_len
+
                 changed_tires_flag = True
+        # if entry["mWheel"][1]["mWear"] > raw_data_telemetry[curr_tel-1]["mWheel"][1]["mWear"] and curr_tel > 0:
+        #     vehicle = raw_data_scoring[curr_tel].get("mVehicles")
+        #     if vehicle[0]["mInPits"] is True:
+        #         print("Zmiana opon 1 wykryta, w stepie:", telemetry_records_len)
+
+        #         changed_tires_flag = True
+        # if entry["mWheel"][2]["mWear"] > raw_data_telemetry[curr_tel-1]["mWheel"][2]["mWear"] and curr_tel > 0:
+        #     vehicle = raw_data_scoring[curr_tel].get("mVehicles")
+        #     if vehicle[0]["mInPits"] is True:
+        #         print("Zmiana opon 2 wykryta, w stepie:", telemetry_records_len)
+        #         changed_tires_flag = True
+
+        # if entry["mWheel"][3]["mWear"] > raw_data_telemetry[curr_tel-1]["mWheel"][3]["mWear"] and curr_tel > 0:
+        #     vehicle = raw_data_scoring[curr_tel].get("mVehicles")
+        #     if vehicle[0]["mInPits"] is True:
+        #         print("Zmiana opon 3 wykryta, w stepie:", telemetry_records_len)
+        #         changed_tires_flag = True
             # changed_tires_flag = True
-        if entry["mFuel"] > raw_data_telemetry[curr_tel-1]["mFuel"]:
+        FUEL_THRESHOLD = 0.01
+        if entry["mFuel"] > raw_data_telemetry[curr_tel-1]["mFuel"] + FUEL_THRESHOLD and curr_tel > 0:
             vehicle = raw_data_scoring[curr_tel].get("mVehicles")
+            
+            
+            # print(f"Fuel level: {entry['mFuel']} at ET {vehicle[0]['mTotalLaps']}, {telemetry_records_len} record")
             if vehicle[0]["mInPits"] is True:
-                refueled_flag = True
+                # refueled_flag = True
+                refueled_amount = entry["mFuel"] - raw_data_telemetry[curr_tel-1]["mFuel"]
+                # print(f"Refueled {round(refueled_amount,5)} liters at ET {vehicle[0]['mTotalLaps']}, {telemetry_records_len} record")
+                skonczone_w_step = telemetry_records_len
                 # print(f"Refueled at ET {vehicle[0]['mTotalLaps']}, {telemetry_records_len} record")
             # changed_tires_flag = True
+        if entry["mDentSeverity"] != raw_data_telemetry[curr_tel-1]["mDentSeverity"] and curr_tel > 0:
+            vehicle = raw_data_scoring[curr_tel].get("mVehicles")
+            if vehicle[0]["mInPits"] is True:
+                print("Naprawa uszkodzen wykryta, w stepie:", telemetry_records_len , "Wczesniejszze uszkodzenia:", raw_data_telemetry[curr_tel-1]["mDentSeverity"], "Aktualne uszkodzenia:", entry["mDentSeverity"])
+                print("zajelo to stepow:", telemetry_records_len - skonczone_w_step, "ile uszkodzen naprawiono:", sum(raw_data_telemetry[curr_tel-1]["mDentSeverity"])-sum(entry["mDentSeverity"]) )
+                steps_duration = telemetry_records_len - skonczone_w_step
+                for i in range(8):
 
+                    if entry["mDentSeverity"][i] < raw_data_telemetry[curr_tel-1]["mDentSeverity"][i]:
+                        print(f"Element {i} naprawiony o wartosc {raw_data_telemetry[curr_tel-1]['mDentSeverity'][i] - entry['mDentSeverity'][i]}")
+                
+                start_index = len(filtered_data_telemetry) - steps_duration
+                end_index = len(filtered_data_telemetry)
+
+                for i in range(start_index, end_index):
+                    if i >= 0: # Zabezpieczenie
+                        filtered_data_telemetry[i]["is_repairing"] = 1
+               # print(entry["mDentSeverity"])
+                # print(raw_data_telemetry[curr_tel-1]["mDentSeverity"])
         avg_temp = 0
+        
         subset = {k: entry.get(k) for k in wanted_keys}
+        subset["refueled_amount"] = refueled_amount
+        subset["is_repairing"] = 0
         subset["changed_tires_flag"] = int(changed_tires_flag)
-        subset["refueled_flag"] = int(refueled_flag)
+        # subset["refueled_flag"] = int(refueled_flag)
       
         filtered_data_telemetry.append(subset)
         telemetry_records_len += 1
@@ -149,17 +203,17 @@ def extract_state(telem_file_raw, scoring_file_raw):
                 
                 zjebany_wyscig = True
 
-            if i < 50 and zjebany_wyscig:
-                print("Kolejne okrazenie")
-                # for (ks, vs), (kt, vt) in zip(scoring.items(), telemetry.items()):
+            # if i < 50 and zjebany_wyscig:
+            #     # print("Kolejne okrazenie")
+            #     # # for (ks, vs), (kt, vt) in zip(scoring.items(), telemetry.items()):
                 
-                #     print("scoring:", ks, vs)
-                #     print("telemetry:", kt, vt)
-                print(scoring["mTotalLapDistance"])
-                print(scoring["mLapDist"])
+            #     #     print("scoring:", ks, vs)
+            #     #     print("telemetry:", kt, vt)
+            #     print(scoring["mTotalLapDistance"])
+            #     print(scoring["mLapDist"])
 
-                print("\n")
-                print("-----")
+            #     print("\n")
+            #     print("-----")
                 
             if telemetry["mLastImpactET"] <= 0:
                 telemetry["mLastImpactET"] = 0.0
@@ -176,8 +230,8 @@ def extract_state(telem_file_raw, scoring_file_raw):
                 last_lap = 0  # placeholder
                 best_lap = 0
             
-            print(telemetry["mLastImpactMagnitude"])
-            print(telemetry_all[i-1]["mLastImpactMagnitude"] if i > 0 else "No previous data")
+            # print(telemetry["mLastImpactMagnitude"])
+            # print(telemetry_all[i-1]["mLastImpactMagnitude"] if i > 0 else "No previous data")
 
             if i > 0 and telemetry["mLastImpactMagnitude"] == telemetry_all[i-1]["mLastImpactMagnitude"]:
                 telemetry["mLastImpactMagnitude"] = 0.0
@@ -187,7 +241,7 @@ def extract_state(telem_file_raw, scoring_file_raw):
                 telemetry["mLastImpactMagnitude"] = 0.0
             else:
                 impact_flag = 1.0
-                print("Impact", telemetry["mLastImpactMagnitude"])
+                # print("Impact", telemetry["mLastImpactMagnitude"])
             
             if scoring["mEndET"] < 0:
                 endET = scoring_all[i+4]["mEndET"]
@@ -223,6 +277,7 @@ def extract_state(telem_file_raw, scoring_file_raw):
 
                 #dane pomocnicze ciągłe
                 curr_step,
+                round(telemetry["refueled_amount"],5),
 
                 # telemetry["mLastImpactET"],
                 telemetry["mLastImpactMagnitude"],
@@ -253,7 +308,8 @@ def extract_state(telem_file_raw, scoring_file_raw):
                 telemetry["mFrontTireCompoundIndex"],
                 telemetry["multiplier"],
                 telemetry["changed_tires_flag"],
-                telemetry["refueled_flag"],
+                telemetry["is_repairing"],
+                # telemetry["refueled_flag"],
 
                 #ciągłe nie używane do trenowania
                 last_lap,
