@@ -273,7 +273,7 @@ class RacingEnv(gym.Env):
         self.wheel2_temp = 340.0
         self.wheel3_temp = 340.0
         self.wheel4_temp = 340.0
-        self.path_wetness = 0.0
+        
         self.last_impact_et = 0.0
         self.last_impact_magnitude = 0.0
         self.num_penalties = 0.0
@@ -301,6 +301,7 @@ class RacingEnv(gym.Env):
         self.raining = weather_start["mRaining"]
         self.ambient_temp = weather_start["mAmbientTemp"]
         self.track_temp = weather_start["mTrackTemp"]
+        self.path_wetness = weather_start["mPathWetness"]
 
         self.end_et = 1932.0
         # self.race_complete_perc = 126.0 / self.end_et #Approxed delta for driving to start line(126s)
@@ -667,6 +668,7 @@ class RacingEnv(gym.Env):
             self.raining = weather_start["mRaining"]
             self.ambient_temp = weather_start["mAmbientTemp"]
             self.track_temp = weather_start["mTrackTemp"]
+            self.path_wetness = weather_start["mPathWetness"]
                             
 
             self.lap_dist = data_lstm[0]
@@ -680,7 +682,7 @@ class RacingEnv(gym.Env):
             self.wheel2_temp = data_lstm[7]
             self.wheel3_temp = data_lstm[8]
             self.wheel4_temp = data_lstm[9]
-            self.path_wetness = data_lstm[10]
+            # self.path_wetness = data_lstm[10]
             self.curr_step += 1
 
             if self.curr_step % 100 == 0:

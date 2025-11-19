@@ -32,19 +32,16 @@ class LSTMStatePredictor(nn.Module):
 
         self.dropout_layer = nn.Dropout(dropout_prob)
     
-        # Twój świetny pomysł z wieloma głowicami - zostaje!
+      
         self.heads = nn.ModuleList([
             nn.Linear(hidden_size, 2),  # progress
             nn.Linear(hidden_size, 1),  # fuel
             nn.Linear(hidden_size, 4),  # wear
-            nn.Linear(hidden_size, 4),  # temp
-            nn.Linear(hidden_size, 1)   # track wetness
+            nn.Linear(hidden_size, 4) # temp
+            # nn.Linear(hidden_size, 1)   # track wetness
         ])
 
-        # Te pola nie są już potrzebne Wewnątrz modelu
-        # self.scaler_X = None
-        # self.scaler_Y = None
-        # self.n_steps_ahead = n_steps_ahead # Usuwamy n_steps_ahead
+      
         self.output_size = output_size
 
     def forward(self, x, h_c=None):

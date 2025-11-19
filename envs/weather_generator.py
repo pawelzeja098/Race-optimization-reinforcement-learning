@@ -9,14 +9,16 @@ def generate_weather_conditions(num_conditions,mRaining_start=0.0,mAmbientTemp_s
     mRaining = mRaining_start
     mAmbientTemp = mAmbientTemp_start if mAmbientTemp_start is not None else uniform(5, 40)
     mTrackTemp = mTrackTemp_start if mTrackTemp_start is not None else mAmbientTemp + uniform(2, 5)
-
+    mPathWetness = 0.0 if mRaining == 0.0 else uniform(0.1, 1.0)
     # if num_conditions == 1:
     raining_time = 0 
     for _ in range(num_conditions):
         condition = {
             "mRaining": round(mRaining, 2),
             "mAmbientTemp": round(mAmbientTemp, 2),
-            "mTrackTemp": round(mTrackTemp, 2)
+            "mTrackTemp": round(mTrackTemp, 2),
+            "mPathWetness": round(mPathWetness, 2)
+
         }
         weather_conditions.append(condition)
 
@@ -24,6 +26,7 @@ def generate_weather_conditions(num_conditions,mRaining_start=0.0,mAmbientTemp_s
         if mRaining < 0.01:
             if random() < 0.001:  # 1% szansy na początek deszczu
                 mRaining = uniform(0.1, 1.0)  
+            mPathWetness = max(0.0, mPathWetness - 0.0002 * mAmbientTemp)  # powolne wysychanie
         else:
             # Jeśli pada, powolna zmiana intensywności
             mRaining = min(1, max(0, mRaining + uniform(-0.01, 0.01)))
@@ -31,6 +34,8 @@ def generate_weather_conditions(num_conditions,mRaining_start=0.0,mAmbientTemp_s
             if random() < 0.005 and raining_time > 300: #mRaining < 0.05 
                 raining_time = 0
                 mRaining = 0.0
+            
+            mPathWetness = max(0.0, min(1.0, mPathWetness + mRaining * 0.05 - 0.0002 * mAmbientTemp)) # szybkie zwiększanie mokrości
 
         mAmbientTemp += uniform(-0.1, 0.1) 
         mAmbientTemp = min(40, max(5, mAmbientTemp))
