@@ -287,8 +287,8 @@ def train_model():
 
     lr = 1e-4
     batch_size = 128
-    num_epochs = 85
-    weight = [0.5, 1.8, 3.0, 0.1, 1.5]
+    num_epochs = 46
+    weight = [0.8, 1.2, 1.8, 0.2]
    
 
     scaler_X, scaler_Y = create_scalers(X,Y)
@@ -328,8 +328,8 @@ def train_model():
 
     
     
-    X_train_tensor = torch.tensor(X_train_samples, dtype=torch.float32).to(device)
-    Y_train_tensor = torch.tensor(Y_train_samples, dtype=torch.float32).to(device)
+    X_train_tensor = torch.tensor(X_train_samples, dtype=torch.float32)
+    Y_train_tensor = torch.tensor(Y_train_samples, dtype=torch.float32)
     
 
     train_dataset = TensorDataset(X_train_tensor, Y_train_tensor)
@@ -352,7 +352,8 @@ def train_model():
 
         for x_batch, y_batch in train_loader:
             optimizer.zero_grad()
-            
+            x_batch = x_batch.to(device)
+            y_batch = y_batch.to(device)
             # Model dostaje całą sekwencję 200 kroków
             # i zwraca predykcje dla całej sekwencji 200 kroków
             y_pred, _ = model(x_batch) 
@@ -365,14 +366,15 @@ def train_model():
             loss_fuel     = loss_cont(y_pred[:, :, 2:3], y_batch[:, :, 2:3])
             loss_wear     = loss_cont(y_pred[:, :, 3:7], y_batch[:, :, 3:7])
             loss_temp     = loss_cont(y_pred[:, :, 7:11], y_batch[:, :, 7:11])
-            loss_wet      = loss_cont(y_pred[:, :, 11:], y_batch[:, :, 11:])
+            # loss_wet      = loss_cont(y_pred[:, :, 11:], y_batch[:, :, 11:])
             
             # Sumujemy straty (tak jak miałeś)
             loss = (weight[0] * loss_progress + 
                     weight[1] * loss_fuel + 
                     weight[2] * loss_wear + 
-                    weight[3] * loss_temp + 
-                    weight[4] * loss_wet)
+                    weight[3] * loss_temp 
+                    # weight[4] * loss_wet)
+            )
             
             loss.backward()
             optimizer.step()
@@ -381,11 +383,11 @@ def train_model():
         avg_train_loss = total_train_loss / len(train_loader)
         scheduler.step(avg_train_loss)
         print(f"Epoch {epoch+1}/{num_epochs}, Train Loss: {avg_train_loss:.4f}")
-    torch.save(model.state_dict(), "models/lstm3_model.pth")
+    torch.save(model.state_dict(), "models/lstm2_model.pth")
     import joblib
-    joblib.dump(scaler_X, "models/scaler3_X.pkl")
-    joblib.dump(scaler_Y, "models/scaler3_Y.pkl")
+    joblib.dump(scaler_X, "models/scaler2_X.pkl")
+    joblib.dump(scaler_Y, "models/scaler2_Y.pkl")
 
-    print("✅ Model saved to models/lstm3_model.pth")
+    print("✅ Model saved to models/lstm2_model.pth")
 
 # train_model()

@@ -282,7 +282,7 @@ def extract_state(telem_file_raw, scoring_file_raw):
 
                 #dane pomocnicze ciągłe
                 curr_step,
-                round(telemetry["refueled_amount"],5),
+                round(telemetry["refueled_amount"],5)/telemetry["mFuelCapacity"],
 
                 # telemetry["mLastImpactET"],
                 telemetry["mLastImpactMagnitude"],
@@ -304,7 +304,7 @@ def extract_state(telem_file_raw, scoring_file_raw):
                 telemetry["mDentSeverity"][6], 
                 telemetry["mDentSeverity"][7],
 
-                has_last_lap,
+                # has_last_lap,
                 scoring["mFinishStatus"],
                 scoring["mTotalLaps"],
                 scoring["mSector"],
