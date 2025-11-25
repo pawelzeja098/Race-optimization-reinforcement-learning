@@ -31,6 +31,10 @@ class RacingEnv(gym.Env):
         self.wheel2_wear = -1.0
         self.wheel3_wear = -1.0
         self.wheel4_wear = -1.0
+        self.wheel1_delta = 0.0
+        self.wheel2_delta = 0.0
+        self.wheel3_delta = 0.0
+        self.wheel4_delta = 0.0
         self.wheel1_temp = -1.0
         self.wheel2_temp = -1.0
         self.wheel3_temp = -1.0
@@ -270,6 +274,10 @@ class RacingEnv(gym.Env):
         self.wheel2_wear = 1.0
         self.wheel3_wear = 1.0
         self.wheel4_wear = 1.0
+        self.wheel1_delta = 0.0
+        self.wheel2_delta = 0.0
+        self.wheel3_delta = 0.0
+        self.wheel4_delta = 0.0
         self.wheel1_temp = 340.0
         self.wheel2_temp = 340.0
         self.wheel3_temp = 340.0
@@ -321,10 +329,14 @@ class RacingEnv(gym.Env):
             self.lap_dist,
             # self.race_complete_perc,
             self.fuel_tank_capacity,
-            self.wheel1_wear,
-            self.wheel2_wear,
-            self.wheel3_wear,
-            self.wheel4_wear,
+            # self.wheel1_wear,
+            # self.wheel2_wear,
+            # self.wheel3_wear,
+            # self.wheel4_wear,
+            self.wheel1_delta,
+            self.wheel2_delta,
+            self.wheel3_delta,
+            self.wheel4_delta,
             self.wheel1_temp,
             self.wheel2_temp,
             self.wheel3_temp,
@@ -633,6 +645,11 @@ class RacingEnv(gym.Env):
             pit_exit_line = 390.0
             tank_capacity_max = 110.0
 
+            self.wheel1_wear = self.wheel1_wear - data_lstm[2]
+            self.wheel2_wear = self.wheel2_wear - data_lstm[3]
+            self.wheel3_wear = self.wheel3_wear - data_lstm[4]
+            self.wheel4_wear = self.wheel4_wear - data_lstm[5]
+
             # if data_lstm[1] < 0.0:
             #     data_lstm[1] = 0.0
 
@@ -647,9 +664,9 @@ class RacingEnv(gym.Env):
             #             data_lstm[i] = self.history[-1][i] - 0.001
 
             #Clipping values to valid ranges
-            for i in range(2, 6):
-                if data_lstm[i] > 1.0:
-                    data_lstm[i] = 1.0
+            # for i in range(2, 6):
+            #     if data_lstm[i] > 1.0:
+            #         data_lstm[i] = 1.0
             
 
             # if data_lstm[10] < 0.0:
@@ -775,8 +792,12 @@ class RacingEnv(gym.Env):
                             self.pit_timer = 8 # Czas trwania wymiany
                             self.tire_compound_index = action[1] - 1.0
                             self.changed_tires_flag = 1.0
-                            for i in range(2, 6):
-                                data_lstm[i] = 1.0 # Reset zużycia opon w danych LSTM
+                            # for i in range(2, 6):
+                            #     data_lstm[i] = 1.0 # Reset zużycia opon w danych LSTM
+                            self.wheel1_wear = 1.0
+                            self.wheel2_wear = 1.0
+                            self.wheel3_wear = 1.0
+                            self.wheel4_wear = 1.0
                             self.pit_stage = 1 # Przechodzimy do wykonywania
                         else:
                             self.pit_stage = 2 # Pomijamy opony, idziemy do paliwa

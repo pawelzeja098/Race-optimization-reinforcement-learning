@@ -15,7 +15,7 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.metrics import mean_squared_error, r2_score
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from config import X_SHAPE, Y_SHAPE, CONT_LENGTH, CAT_LENGTH
+from config import X_SHAPE, Y_SHAPE, CONT_LENGTH, CAT_LENGTH, Y_INDEXES, NO_SCALER_IDXES_X, MIN_MAX_SCALER_IDXES_X, ROBUST_SCALER_IDXES_X, NO_SCALER_IDEXES_Y, MIN_MAX_SCALER_IDXES_Y, ROBUST_SCALER_IDXES_Y
 
 
 
@@ -31,6 +31,7 @@ class LSTMStatePredictor(nn.Module):
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True,dropout=lstm_dropout_prob)
 
         self.dropout_layer = nn.Dropout(dropout_prob)
+        self.act_delta = nn.ReLU()
     
       
         self.heads = nn.ModuleList([
@@ -58,6 +59,10 @@ class LSTMStatePredictor(nn.Module):
         # 3. Zastosuj głowice do CAŁEGO tensora 'out', a nie tylko 'out[:, -1, :]'
         #    head(out) da np. [B, seq_len, 2]
         outputs = [head(out) for head in self.heads]
+
+        outputs[2] = self.act_delta(outputs[2])
+
+
         
         # 4. Połącz wzdłuż ostatniego wymiaru (wymiaru cech)
         #    List of [B,S,2], [B,S,1], [B,S,4]... -> [B, S, 12]
@@ -68,34 +73,50 @@ class LSTMStatePredictor(nn.Module):
 
 def create_scalers(X,Y):
 
-    cont_indices_x = slice(0, CONT_LENGTH)   # continuous columns for X (0–18)
-    cont_indices_y = slice(0, Y_SHAPE)   # continuous columns for Y (0–11)
+    # cont_indices_x = slice(0, CONT_LENGTH)   # continuous columns for X (0–18)
+    # cont_indices_y = slice(0, Y_SHAPE)   # continuous columns for Y (0–11)
 
-    # Scale continuous features
-    flat_x = np.vstack([x[:, cont_indices_x] for x in X])
-    flat_y = np.vstack([y[:, cont_indices_y] for y in Y])
+    no_scaler_x = slice(0, NO_SCALER_IDXES_X)  # no scaler for X
+    min_max_scaler_x = slice(NO_SCALER_IDXES_X, MIN_MAX_SCALER_IDXES_X)  # min-max scaler for X
+    robust_scaler_x = slice(MIN_MAX_SCALER_IDXES_X, ROBUST_SCALER_IDXES_X)  # robust scaler for X
+    no_scaler_y = slice(0, NO_SCALER_IDEXES_Y)  # no scaler for Y
+    min_max_scaler_y = slice(NO_SCALER_IDEXES_Y, MIN_MAX_SCALER_IDXES_Y)  # min-max scaler for Y
+    robust_scaler_y = slice(MIN_MAX_SCALER_IDXES_Y, ROBUST_SCALER_IDXES_Y)  # robust scaler for Y
 
-    # scaler_X = MinMaxScaler().fit(flat_x)
-    # # scaler_Y = MinMaxScaler().fit(flat_y)
-    # scaler_Y = StandardScaler().fit(flat_y)
-    scaler_X = RobustScaler().fit(flat_x)
-    scaler_Y = RobustScaler().fit(flat_y)
-    return scaler_X, scaler_Y
+   
+    flat_x_min_max = np.vstack([x[:, min_max_scaler_x] for x in X])
+    flat_x_robust = np.vstack([x[:, robust_scaler_x] for x in X])
+    flat_y_min_max = np.vstack([y[:, min_max_scaler_y] for y in Y])
+    flat_y_robust = np.vstack([y[:, robust_scaler_y] for y in Y])
 
-def scale_input(X, Y, scaler_X, scaler_Y):
-    cont_indices_x = slice(0, CONT_LENGTH)   # continuous columns for X
-    cont_indices_y = slice(0, Y_SHAPE)   # continuous columns for Y
+    scaler_X_min_max = MinMaxScaler().fit(flat_x_min_max)
+    scaler_X_robust = RobustScaler().fit(flat_x_robust)
+    scaler_Y_min_max = MinMaxScaler().fit(flat_y_min_max)
+    scaler_Y_robust = RobustScaler().fit(flat_y_robust)
+
+   
+    return scaler_X_min_max, scaler_X_robust, scaler_Y_min_max, scaler_Y_robust
+
+def scale_input(X, Y, scaler_X_min_max, scaler_X_robust, scaler_Y_min_max, scaler_Y_robust):
+    no_scaler_x = slice(0, NO_SCALER_IDXES_X)  # no scaler for X
+    min_max_scaler_x = slice(NO_SCALER_IDXES_X, MIN_MAX_SCALER_IDXES_X)  # min-max scaler for X
+    robust_scaler_x = slice(MIN_MAX_SCALER_IDXES_X, ROBUST_SCALER_IDXES_X)  # robust scaler for X
+    no_scaler_y = slice(0, NO_SCALER_IDEXES_Y)  # no scaler for Y
+    min_max_scaler_y = slice(NO_SCALER_IDEXES_Y, MIN_MAX_SCALER_IDXES_Y)  # min-max scaler for Y
+    robust_scaler_y = slice(MIN_MAX_SCALER_IDXES_Y, ROBUST_SCALER_IDXES_Y)  # robust scaler for Y
 
     X_scaled_grouped = []
     Y_scaled_grouped = []
 
     for x_seq, y_seq in zip(X, Y):
         x_scaled = np.array(x_seq, dtype=float)
-        x_scaled[:, cont_indices_x] = scaler_X.transform(x_seq[:, cont_indices_x])
+        x_scaled[:, min_max_scaler_x] = scaler_X_min_max.transform(x_seq[:, min_max_scaler_x])
+        x_scaled[:, robust_scaler_x] = scaler_X_robust.transform(x_seq[:, robust_scaler_x])
         X_scaled_grouped.append(x_scaled)
 
         y_scaled = np.array(y_seq, dtype=float)
-        y_scaled[:, cont_indices_y] = scaler_Y.transform(y_seq[:, cont_indices_y])
+        y_scaled[:, min_max_scaler_y] = scaler_Y_min_max.transform(y_seq[:, min_max_scaler_y])
+        y_scaled[:, robust_scaler_y] = scaler_Y_robust.transform(y_seq[:, robust_scaler_y])
         Y_scaled_grouped.append(y_scaled)
 
     # Conversion to torch tensors
@@ -114,26 +135,29 @@ def scale_input(X, Y, scaler_X, scaler_Y):
 #         X_scaled_grouped.append(x_scaled)
 #     return X_scaled_grouped
 
-def scale_single_input(raw_vector_x, scaler_x_cont):
+def scale_single_input(raw_vector_x, scaler_X_min_max, scaler_X_robust):
     """
     Skaluje pojedynczy wektor (37,), stosując scaler tylko do 
     części ciągłej (0-19) i zostawiając kategorialną (20-36).
     """
-    cont_indices_x = slice(0, CONT_LENGTH)
-    cat_indices_x = slice(CONT_LENGTH, X_SHAPE)
+    no_scaler_x = slice(0, NO_SCALER_IDXES_X)  # no scaler for X
+    min_max_scaler_x = slice(NO_SCALER_IDXES_X, MIN_MAX_SCALER_IDXES_X)  # min-max scaler for X
+    robust_scaler_x = slice(MIN_MAX_SCALER_IDXES_X, ROBUST_SCALER_IDXES_X)  # robust scaler for X
+ 
     
     # raw_vector_x[cont_indices_x] ma kształt (19,)
     # Musimy go przekształcić na (1, 19) dla scalera
-    x_cont_scaled = scaler_x_cont.transform([raw_vector_x[cont_indices_x]])
+    x_min_max_scaled = scaler_X_min_max.transform([raw_vector_x[min_max_scaler_x]])
+    x_robust_scaled = scaler_X_robust.transform([raw_vector_x[robust_scaler_x]])
     
     # raw_vector_x[cat_indices_x] ma kształt (18,)
     # --- POPRAWKA TUTAJ ---
     # Musimy go przekształcić na (1, 19), aby pasował do hstack
-    x_cat = raw_vector_x[cat_indices_x].reshape(1, -1)
+    x_no_scaled = raw_vector_x[no_scaler_x].reshape(1, -1)
     
     # Teraz łączymy (1, 19) z (1, 18) -> (1, 37)
     # i spłaszczamy z powrotem do 1D (37,)
-    return np.hstack([x_cont_scaled, x_cat]).flatten()
+    return np.hstack([x_no_scaled, x_min_max_scaled, x_robust_scaled]).flatten()
        
 
 # def create_window_pred(sequence_x, window_size, n_steps_ahead=5):
@@ -154,7 +178,10 @@ def scale_single_input(raw_vector_x, scaler_x_cont):
 
 
 
-def generate_predictions(model, input_seq,scaler_X=None, scaler_Y=None,h_c=None):
+def generate_predictions(model, input_seq,scaler_X_min_max=None, scaler_X_robust=None, scaler_Y_min_max=None, scaler_Y_robust=None,h_c=None):
+    no_scaler_y = slice(0, NO_SCALER_IDEXES_Y)  # no scaler for Y
+    min_max_scaler_y = slice(NO_SCALER_IDEXES_Y, MIN_MAX_SCALER_IDXES_Y)  # min-max scaler for Y
+    robust_scaler_y = slice(MIN_MAX_SCALER_IDXES_Y, ROBUST_SCALER_IDXES_Y)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.eval()
     lap_dist_sin = np.sin(2 * np.pi * input_seq[0])
@@ -166,7 +193,7 @@ def generate_predictions(model, input_seq,scaler_X=None, scaler_Y=None,h_c=None)
         lap_dist_cos, 
         input_seq[1:]  # <-- Pomijamy starą cechę LAP_DIST
     ])
-    input_seq = scale_single_input(input_seq, scaler_X)
+    input_seq = scale_single_input(input_seq, scaler_X_min_max, scaler_X_robust)
 
 
 
@@ -175,10 +202,23 @@ def generate_predictions(model, input_seq,scaler_X=None, scaler_Y=None,h_c=None)
     with torch.no_grad():
         input_tensor = torch.tensor(input_seq, dtype=torch.float32).reshape(1, 1, X_SHAPE).to(device)
         predictions , h_c = model(input_tensor, h_c)
-        predictions = predictions.cpu().numpy().reshape(1, Y_SHAPE)
+        predictions_scaled = predictions.cpu().numpy().reshape(1, Y_SHAPE)
+
+        predictions_raw = np.zeros_like(predictions_scaled)
         
-        predictions = scaler_Y.inverse_transform(predictions)
-        return predictions.flatten(), h_c
+        # A. No Scaler (Sin/Cos) - Przepisujemy
+        predictions_raw[:, no_scaler_y] = predictions_scaled[:, no_scaler_y]
+        
+        # B. MinMax (Delty) - Odwracamy
+        # scaler_Y_min_max oczekuje 5 cech, dajemy mu 5 cech
+        predictions_raw[:, min_max_scaler_y] = scaler_Y_min_max.inverse_transform(predictions_scaled[:, min_max_scaler_y])
+        
+        # C. Robust (Temperatury) - Odwracamy
+        # scaler_Y_robust oczekuje 4 cech, dajemy mu 4 cechy
+        predictions_raw[:, robust_scaler_y] = scaler_Y_robust.inverse_transform(predictions_scaled[:, robust_scaler_y])
+        
+    
+        return predictions_raw.flatten(), h_c
     
 def load_data_from_db():
     
@@ -211,9 +251,8 @@ def create_x_y(data):
     for race in data:
         X_seq, Y_seq = [], []
         for i in range(len(race) - 1):
-            X_seq.append(race[i])
-            Y_seq.append(race[i + 1][:Y_SHAPE])  # Y to pierwsze 12 cech
-        
+            X_seq.append(race[i][:Y_INDEXES])  # current state
+            Y_seq.append(race[i + 1][Y_INDEXES:])  # next state
         # dodajemy każdy wyścig osobno
         X_grouped.append(np.array(X_seq, dtype=float))
         Y_grouped.append(np.array(Y_seq, dtype=float))
@@ -287,13 +326,13 @@ def train_model():
 
     lr = 1e-4
     batch_size = 128
-    num_epochs = 46
+    num_epochs = 20
     weight = [0.8, 1.2, 1.8, 0.2]
    
 
-    scaler_X, scaler_Y = create_scalers(X,Y)
+    scaler_X_min_max, scaler_X_robust, scaler_Y_min_max, scaler_Y_robust = create_scalers(X,Y)
 
-    X_train, Y_train = scale_input(X,Y,scaler_X,scaler_Y)
+    X_train, Y_train = scale_input(X,Y,scaler_X_min_max, scaler_X_robust, scaler_Y_min_max, scaler_Y_robust)
     
     # n_steps_ahead = 5  # number of future steps to predict
 
@@ -383,11 +422,13 @@ def train_model():
         avg_train_loss = total_train_loss / len(train_loader)
         scheduler.step(avg_train_loss)
         print(f"Epoch {epoch+1}/{num_epochs}, Train Loss: {avg_train_loss:.4f}")
-    torch.save(model.state_dict(), "models/lstm2_model.pth")
+    torch.save(model.state_dict(), "models/lstmdeltaT_model.pth")
     import joblib
-    joblib.dump(scaler_X, "models/scaler2_X.pkl")
-    joblib.dump(scaler_Y, "models/scaler2_Y.pkl")
+    joblib.dump(scaler_X_min_max, "models/scalerX_min_max.pkl")
+    joblib.dump(scaler_X_robust, "models/scalerX_robust.pkl")
+    joblib.dump(scaler_Y_min_max, "models/scalerY_min_max.pkl")
+    joblib.dump(scaler_Y_robust, "models/scalerY_robust.pkl")
 
-    print("✅ Model saved to models/lstm2_model.pth")
+    print("✅ Model saved to models/lstm_model.pth")
 
-# train_model()
+train_model()
