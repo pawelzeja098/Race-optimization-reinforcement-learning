@@ -4,7 +4,7 @@ import numpy as np
 import sqlite3
 import json
 import copy
-
+import matplotlib.pyplot as plt
 # from generate_actions_BC import generate_actions_BC
 # from generate_state_BC import extract_state
 
@@ -13,6 +13,7 @@ import copy
 
 
 def filtr_json_files(telem_file_raw, scoring_file_raw):
+    print("Filtracja plików:", telem_file_raw, "i", scoring_file_raw)
     data_telem = json.load(open(telem_file_raw ))
     data_scoring = json.load(open(scoring_file_raw))
     raw_data_telemetry = []
@@ -34,6 +35,7 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
     start_flag = False
     # data_saved_scoring = 0
     start_lights_flag = False
+    lap_dist_hist = []
 
     for entry in raw_data_scoring:
         # for vehicle in raw_data_scoring.get("mVehicles", []):
@@ -69,6 +71,7 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
         if vehicle[0]["mFinishStatus"] == 1:
             subset_scoring_vehicle = {k: vehicle[0].get(k) for k in wanted_keys}
 
+        
         # print(json.dumps(vehicle, indent=2))
         # scoring_records.append(data)
             filtered_data_scoring.append({**subset_scoring_vehicle, **subset_weather})
@@ -77,11 +80,19 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
             break
 
         subset_scoring_vehicle = {k: vehicle[0].get(k) for k in wanted_keys}
-
+        if subset_scoring_vehicle["mLapDist"] < 20:
+            lap_dist_hist.append(subset_scoring_vehicle["mLapDist"])
+        if subset_scoring_vehicle["mLapDist"] < 0:
+            print("Negative lap distance detected at record", scoring_records_len, "value:", subset_scoring_vehicle["mLapDist"])
         # print(json.dumps(vehicle, indent=2))
         # scoring_records.append(data)
         filtered_data_scoring.append({**subset_scoring_vehicle, **subset_weather})
         scoring_records_len += 1
+    
+    # plt.plot(lap_dist_hist)
+    # plt.title("Lap distance over time")
+    # plt.show()
+
     
     telemetry_records_len = 0
     count_before_start = 0
@@ -89,6 +100,8 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
     curr_tel = 0
     delta_fuel = 0.0
     delta_tires = [0.0,0.0,0.0,0.0]
+    delta_fuel_hist = []
+    delta_tires_hist = []
     for entry in raw_data_telemetry:
         refueled_amount = 0.0
         changed_tires_flag = False
@@ -109,8 +122,15 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
         if curr_tel > 0:
             for i in range(4):
                 delta_tires[i] = raw_data_telemetry[curr_tel-1]["mWheel"][i]["mWear"] - entry["mWheel"][i]["mWear"] 
-            print("Delta opon w stepie", telemetry_records_len, ":", delta_tires)
+                if delta_tires[i] < 0:
+                    delta_tires[i] = 0.0
+            # print("Delta opon w stepie", telemetry_records_len, ":", delta_tires)
+            # if delta_tires[0] < 0:
+            #     print("Negative delta tires[0] detected at step", telemetry_records_len, "value:", delta_tires[0], "max steps:", scoring_records_len)
+
             delta_fuel = raw_data_telemetry[curr_tel-1]["mFuel"] - entry["mFuel"]
+            
+            
         else:
             delta_tires = [0.0,0.0,0.0,0.0]
         
@@ -121,8 +141,6 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
 
         if entry["mWheel"][0]["mWear"] > raw_data_telemetry[curr_tel-1]["mWheel"][0]["mWear"] and curr_tel > 0:
             vehicle = raw_data_scoring[curr_tel].get("mVehicles")
-            wear_diff = entry["mWheel"][0]["mWear"] - raw_data_telemetry[curr_tel-1]["mWheel"][0]["mWear"]
-            wear_diff1 = entry["mWheel"][1]["mWear"] - raw_data_telemetry[curr_tel-1]["mWheel"][1]["mWear"]
             delta_tires = [0.0,0.0,0.0,0.0]
             if vehicle[0]["mInPits"] is True:
                 # print("Zmiana opon 0 wykryta, w stepie:", telemetry_records_len)
@@ -130,24 +148,7 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
                 skonczone_w_step = telemetry_records_len
 
                 changed_tires_flag = True
-        # if entry["mWheel"][1]["mWear"] > raw_data_telemetry[curr_tel-1]["mWheel"][1]["mWear"] and curr_tel > 0:
-        #     vehicle = raw_data_scoring[curr_tel].get("mVehicles")
-        #     if vehicle[0]["mInPits"] is True:
-        #         print("Zmiana opon 1 wykryta, w stepie:", telemetry_records_len)
-
-        #         changed_tires_flag = True
-        # if entry["mWheel"][2]["mWear"] > raw_data_telemetry[curr_tel-1]["mWheel"][2]["mWear"] and curr_tel > 0:
-        #     vehicle = raw_data_scoring[curr_tel].get("mVehicles")
-        #     if vehicle[0]["mInPits"] is True:
-        #         print("Zmiana opon 2 wykryta, w stepie:", telemetry_records_len)
-        #         changed_tires_flag = True
-
-        # if entry["mWheel"][3]["mWear"] > raw_data_telemetry[curr_tel-1]["mWheel"][3]["mWear"] and curr_tel > 0:
-        #     vehicle = raw_data_scoring[curr_tel].get("mVehicles")
-        #     if vehicle[0]["mInPits"] is True:
-        #         print("Zmiana opon 3 wykryta, w stepie:", telemetry_records_len)
-        #         changed_tires_flag = True
-            # changed_tires_flag = True
+      
         FUEL_THRESHOLD = 0.01
         if entry["mFuel"] > raw_data_telemetry[curr_tel-1]["mFuel"] + FUEL_THRESHOLD and curr_tel > 0:
             vehicle = raw_data_scoring[curr_tel].get("mVehicles")
@@ -189,6 +190,11 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
         subset["refueled_amount"] = refueled_amount
         subset["is_repairing"] = 0
         subset["changed_tires_flag"] = int(changed_tires_flag)
+        delta_tires_hist.append(delta_tires[0])
+        delta_fuel_hist.append(delta_fuel)
+        if delta_fuel < 0:
+                
+                print("Negative delta fuel detected at step", telemetry_records_len, "value:", delta_fuel, "max steps:", scoring_records_len)
         # subset["refueled_flag"] = int(refueled_flag)
       
         filtered_data_telemetry.append(subset)
@@ -196,6 +202,13 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
         curr_tel += 1
         # print(json.dumps(subset, indent=2))
     
+    # plt.plot(delta_fuel_hist)
+    # plt.title("Delta fuel per step")
+    # plt.show()
+
+    # plt.plot(delta_tires_hist)
+    # plt.title("Delta tires[0] per step")
+    # plt.show()
 
     return filtered_data_telemetry, filtered_data_scoring
     # with open(telem_file_filtered, "w") as f:
@@ -269,9 +282,11 @@ def extract_state(telem_file_raw, scoring_file_raw):
             else:
                 endET = scoring["mEndET"]
 
-            lap_dist_sin = np.sin(2 * np.pi * (scoring["mLapDist"] / scoring["mTotalLapDistance"]))
+            corrected_dist_meters = scoring["mLapDist"] % scoring["mTotalLapDistance"]
 
-            lap_dist_cos = np.cos(2 * np.pi * (scoring["mLapDist"] / scoring["mTotalLapDistance"]))
+            lap_dist_sin = np.sin(2 * np.pi * (corrected_dist_meters / scoring["mTotalLapDistance"]))
+
+            lap_dist_cos = np.cos(2 * np.pi * (corrected_dist_meters / scoring["mTotalLapDistance"]))
             curr_step = i/len_data
         #     data_state_per = [
         #         #dane do przewidzenia
@@ -361,7 +376,7 @@ def extract_state(telem_file_raw, scoring_file_raw):
                 telemetry["mWheel"][2]["mWear"],
                 telemetry["mWheel"][3]["mWear"],
                 curr_step,
-                telemetry["refueled_amount"]/telemetry["mFuelCapacity"],
+                telemetry["refueled_amount"],
                 scoring["mRaining"],
                 impact_flag,
                 # scoring["mFinishStatus"],
@@ -398,7 +413,7 @@ def extract_state(telem_file_raw, scoring_file_raw):
                 lap_dist_sin,
                 lap_dist_cos,
                 #MIN-MAX SCALER
-                telemetry["delta_fuel"]/telemetry["mFuelCapacity"],
+                telemetry["delta_fuel"],
                 telemetry["delta_tires"][0],
                 telemetry["delta_tires"][1],
                 telemetry["delta_tires"][2],

@@ -32,6 +32,7 @@ class LSTMStatePredictor(nn.Module):
 
         self.dropout_layer = nn.Dropout(dropout_prob)
         self.act_delta = nn.ReLU()
+        self.act_pos = nn.Tanh()
     
       
         self.heads = nn.ModuleList([
@@ -56,11 +57,14 @@ class LSTMStatePredictor(nn.Module):
 
         out = self.dropout_layer(out)  # Zastosuj dropout do wyjścia LSTM
         
-        # 3. Zastosuj głowice do CAŁEGO tensora 'out', a nie tylko 'out[:, -1, :]'
-        #    head(out) da np. [B, seq_len, 2]
+        # 3. Przetwórz każde wyjście przez odpowiednią głowicę
         outputs = [head(out) for head in self.heads]
 
+        #4. Aktywacje specyficzne dla każdej głowicy
+        outputs[0] = self.act_pos(outputs[0])
+        outputs[1] = self.act_delta(outputs[1])
         outputs[2] = self.act_delta(outputs[2])
+        
 
 
         
@@ -327,7 +331,7 @@ def train_model():
     lr = 1e-4
     batch_size = 128
     num_epochs = 20
-    weight = [0.8, 1.2, 1.8, 0.2]
+    weight = [1.8, 0.7, 1.3, 0.2]
    
 
     scaler_X_min_max, scaler_X_robust, scaler_Y_min_max, scaler_Y_robust = create_scalers(X,Y)
@@ -431,4 +435,4 @@ def train_model():
 
     print("✅ Model saved to models/lstm_model.pth")
 
-train_model()
+# train_model()
