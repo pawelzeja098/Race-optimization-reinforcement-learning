@@ -12,23 +12,24 @@ import numpy as np
 # mDentSeverity[6]: min=0.0, max=0.0
 # mDentSeverity[7]: min=0.0, max=2.0
 
-def random_impact_magnitude(prob_impact = 0.001): #real is 0.01
+def random_impact_magnitude(prob_impact = 0.008,probabilities = None, bin_edges = None): 
 
     if np.random.rand() > prob_impact:
         return 0.0
-    probabilities = np.load('E:/pracadyp/Race-optimization-reinforcement-learning/data/probabilities_impact/probabilities.npy')
-    bin_edges = np.load('E:/pracadyp/Race-optimization-reinforcement-learning/data/probabilities_impact/bin_edges.npy')
+    
 
     bin_idx = np.random.choice(len(probabilities), p=probabilities)
     low, high = bin_edges[bin_idx], bin_edges[bin_idx + 1]
     return np.random.uniform(low, high)
 
-def generate_dent_severity(impact_magnitude,dent_severity_current):
+
+def generate_dent_severity(impact_magnitude):
     # Przykładowe progi i losowanie uszkodzenia
     if impact_magnitude == 0.0:
-        return dent_severity_current
+        return [0.0]*8
     values = [0, 1, 2, 3] #front,right,left,rear
     probabilities = [0.35, 0.15, 0.15, 0.35]
+    dent_severity_change = [0.0]*8
 
     random_value = np.random.choice(values, p=probabilities)
 
@@ -81,9 +82,9 @@ def generate_dent_severity(impact_magnitude,dent_severity_current):
         if np.random.rand() > elem_damage_prob:  # szansa na uszkodzenie tego elementu
             continue
         else:
-            if dent_severity_current[i] < 2.0:
-                dent_severity_current[i] += np.random.choice(damage_levels, p=damage_probs)
-                dent_severity_current[i] = min(dent_severity_current[i], 2.0)  # max 2.0
-    return dent_severity_current
-
-random_impact_magnitude()
+            dent_severity_change[i] = np.random.choice(damage_levels, p=damage_probs)
+            # if dent_severity_current[i] < 2.0:
+            #     dent_severity_current[i] += np.random.choice(damage_levels, p=damage_probs)
+            #     dent_severity_current[i] = min(dent_severity_current[i], 2.0)  # max 2.0
+    return dent_severity_change
+# random_impact_magnitude()

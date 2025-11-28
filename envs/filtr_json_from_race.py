@@ -4,7 +4,7 @@ import numpy as np
 import sqlite3
 import json
 import copy
-
+import matplotlib.pyplot as plt
 # from generate_actions_BC import generate_actions_BC
 # from generate_state_BC import extract_state
 
@@ -13,6 +13,7 @@ import copy
 
 
 def filtr_json_files(telem_file_raw, scoring_file_raw):
+    print("Filtracja plików:", telem_file_raw, "i", scoring_file_raw)
     data_telem = json.load(open(telem_file_raw ))
     data_scoring = json.load(open(scoring_file_raw))
     raw_data_telemetry = []
@@ -34,6 +35,7 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
     start_flag = False
     # data_saved_scoring = 0
     start_lights_flag = False
+    lap_dist_hist = []
 
     for entry in raw_data_scoring:
         # for vehicle in raw_data_scoring.get("mVehicles", []):
@@ -69,6 +71,7 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
         if vehicle[0]["mFinishStatus"] == 1:
             subset_scoring_vehicle = {k: vehicle[0].get(k) for k in wanted_keys}
 
+        
         # print(json.dumps(vehicle, indent=2))
         # scoring_records.append(data)
             filtered_data_scoring.append({**subset_scoring_vehicle, **subset_weather})
@@ -77,16 +80,28 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
             break
 
         subset_scoring_vehicle = {k: vehicle[0].get(k) for k in wanted_keys}
-
+        if subset_scoring_vehicle["mLapDist"] < 20:
+            lap_dist_hist.append(subset_scoring_vehicle["mLapDist"])
+        if subset_scoring_vehicle["mLapDist"] < 0:
+            print("Negative lap distance detected at record", scoring_records_len, "value:", subset_scoring_vehicle["mLapDist"])
         # print(json.dumps(vehicle, indent=2))
         # scoring_records.append(data)
         filtered_data_scoring.append({**subset_scoring_vehicle, **subset_weather})
         scoring_records_len += 1
     
+    # plt.plot(lap_dist_hist)
+    # plt.title("Lap distance over time")
+    # plt.show()
+
+    
     telemetry_records_len = 0
     count_before_start = 0
     data_saved_telemetry = 0
     curr_tel = 0
+    delta_fuel = 0.0
+    delta_tires = [0.0,0.0,0.0,0.0]
+    delta_fuel_hist = []
+    delta_tires_hist = []
     for entry in raw_data_telemetry:
         refueled_amount = 0.0
         changed_tires_flag = False
@@ -104,48 +119,47 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
         wanted_keys = ["mFuel", "mFuelCapacity","mWheel","mDentSeverity","mFrontTireCompoundIndex","mCurrentSector","mLapNumber","mLastImpactET","mLastImpactMagnitude","multiplier","is_repairing"]
         vehicle = raw_data_scoring[curr_tel].get("mVehicles")
 
-        if vehicle[0]["mInPits"] is True:
-            print("Distance in lap during pitstop:", vehicle[0]["mLapDist"], "at telemetry record:", telemetry_records_len)
+        if curr_tel > 0:
+            for i in range(4):
+                delta_tires[i] = raw_data_telemetry[curr_tel-1]["mWheel"][i]["mWear"] - entry["mWheel"][i]["mWear"] 
+                if delta_tires[i] < 0:
+                    delta_tires[i] = 0.0
+            # print("Delta opon w stepie", telemetry_records_len, ":", delta_tires)
+            # if delta_tires[0] < 0:
+            #     print("Negative delta tires[0] detected at step", telemetry_records_len, "value:", delta_tires[0], "max steps:", scoring_records_len)
+
+            delta_fuel = raw_data_telemetry[curr_tel-1]["mFuel"] - entry["mFuel"]
+            
+            
+        else:
+            delta_tires = [0.0,0.0,0.0,0.0]
+        
+        # if vehicle[0]["mInPits"] is True:
+        #     # print("Distance in lap during pitstop:", vehicle[0]["mLapDist"], "at telemetry record:", telemetry_records_len)
+
+        
 
         if entry["mWheel"][0]["mWear"] > raw_data_telemetry[curr_tel-1]["mWheel"][0]["mWear"] and curr_tel > 0:
             vehicle = raw_data_scoring[curr_tel].get("mVehicles")
-            wear_diff = entry["mWheel"][0]["mWear"] - raw_data_telemetry[curr_tel-1]["mWheel"][0]["mWear"]
-            wear_diff1 = entry["mWheel"][1]["mWear"] - raw_data_telemetry[curr_tel-1]["mWheel"][1]["mWear"]
+            delta_tires = [0.0,0.0,0.0,0.0]
             if vehicle[0]["mInPits"] is True:
-                print("Zmiana opon 0 wykryta, w stepie:", telemetry_records_len)
+                # print("Zmiana opon 0 wykryta, w stepie:", telemetry_records_len)
                 # print(entry["mWheel"][0]["mWear"])
                 skonczone_w_step = telemetry_records_len
 
                 changed_tires_flag = True
-        # if entry["mWheel"][1]["mWear"] > raw_data_telemetry[curr_tel-1]["mWheel"][1]["mWear"] and curr_tel > 0:
-        #     vehicle = raw_data_scoring[curr_tel].get("mVehicles")
-        #     if vehicle[0]["mInPits"] is True:
-        #         print("Zmiana opon 1 wykryta, w stepie:", telemetry_records_len)
-
-        #         changed_tires_flag = True
-        # if entry["mWheel"][2]["mWear"] > raw_data_telemetry[curr_tel-1]["mWheel"][2]["mWear"] and curr_tel > 0:
-        #     vehicle = raw_data_scoring[curr_tel].get("mVehicles")
-        #     if vehicle[0]["mInPits"] is True:
-        #         print("Zmiana opon 2 wykryta, w stepie:", telemetry_records_len)
-        #         changed_tires_flag = True
-
-        # if entry["mWheel"][3]["mWear"] > raw_data_telemetry[curr_tel-1]["mWheel"][3]["mWear"] and curr_tel > 0:
-        #     vehicle = raw_data_scoring[curr_tel].get("mVehicles")
-        #     if vehicle[0]["mInPits"] is True:
-        #         print("Zmiana opon 3 wykryta, w stepie:", telemetry_records_len)
-        #         changed_tires_flag = True
-            # changed_tires_flag = True
+      
         FUEL_THRESHOLD = 0.01
         if entry["mFuel"] > raw_data_telemetry[curr_tel-1]["mFuel"] + FUEL_THRESHOLD and curr_tel > 0:
             vehicle = raw_data_scoring[curr_tel].get("mVehicles")
 
-            
+            delta_fuel = 0.0
             
             # print(f"Fuel level: {entry['mFuel']} at ET {vehicle[0]['mTotalLaps']}, {telemetry_records_len} record")
             if vehicle[0]["mInPits"] is True:
                 # refueled_flag = True
                 refueled_amount = entry["mFuel"] - raw_data_telemetry[curr_tel-1]["mFuel"]
-                print(f"Refueled {round(refueled_amount,5)} liters at ET {vehicle[0]['mTotalLaps']}, {telemetry_records_len} record")
+                # print(f"Refueled {round(refueled_amount,5)} liters at ET {vehicle[0]['mTotalLaps']}, {telemetry_records_len} record")
                 skonczone_w_step = telemetry_records_len
                 # print(f"Refueled at ET {vehicle[0]['mTotalLaps']}, {telemetry_records_len} record")
             # changed_tires_flag = True
@@ -171,9 +185,16 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
         avg_temp = 0
         
         subset = {k: entry.get(k) for k in wanted_keys}
+        subset["delta_tires"] = delta_tires
+        subset["delta_fuel"] = delta_fuel
         subset["refueled_amount"] = refueled_amount
         subset["is_repairing"] = 0
         subset["changed_tires_flag"] = int(changed_tires_flag)
+        delta_tires_hist.append(delta_tires[0])
+        delta_fuel_hist.append(delta_fuel)
+        if delta_fuel < 0:
+                
+                print("Negative delta fuel detected at step", telemetry_records_len, "value:", delta_fuel, "max steps:", scoring_records_len)
         # subset["refueled_flag"] = int(refueled_flag)
       
         filtered_data_telemetry.append(subset)
@@ -181,6 +202,13 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
         curr_tel += 1
         # print(json.dumps(subset, indent=2))
     
+    # plt.plot(delta_fuel_hist)
+    # plt.title("Delta fuel per step")
+    # plt.show()
+
+    # plt.plot(delta_tires_hist)
+    # plt.title("Delta tires[0] per step")
+    # plt.show()
 
     return filtered_data_telemetry, filtered_data_scoring
     # with open(telem_file_filtered, "w") as f:
@@ -254,47 +282,109 @@ def extract_state(telem_file_raw, scoring_file_raw):
             else:
                 endET = scoring["mEndET"]
 
-            lap_dist_sin = np.sin(2 * np.pi * (scoring["mLapDist"] / scoring["mTotalLapDistance"]))
+            corrected_dist_meters = scoring["mLapDist"] % scoring["mTotalLapDistance"]
 
-            lap_dist_cos = np.cos(2 * np.pi * (scoring["mLapDist"] / scoring["mTotalLapDistance"]))
+            lap_dist_sin = np.sin(2 * np.pi * (corrected_dist_meters / scoring["mTotalLapDistance"]))
+
+            lap_dist_cos = np.cos(2 * np.pi * (corrected_dist_meters / scoring["mTotalLapDistance"]))
             curr_step = i/len_data
+        #     data_state_per = [
+        #         #dane do przewidzenia
+        #         #dane ciągłe
+                
+        #         # scoring["mCurrLapTime"],
+                
+        #         # round(scoring["mLapDist"]/scoring["mTotalLapDistance"],5),
+        #         lap_dist_sin,
+        #         lap_dist_cos,
+        #         # round(scoring["mCurrentET"]/endET,5),
+        #         sum(telemetry["mWheel"][0]["mTemperature"])/len(telemetry["mWheel"][0]["mTemperature"]),
+        #         sum(telemetry["mWheel"][1]["mTemperature"])/len(telemetry["mWheel"][1]["mTemperature"]),
+        #         sum(telemetry["mWheel"][2]["mTemperature"])/len(telemetry["mWheel"][2]["mTemperature"]),
+        #         sum(telemetry["mWheel"][3]["mTemperature"])/len(telemetry["mWheel"][3]["mTemperature"]),
+
+        #         telemetry["mFuel"]/telemetry["mFuelCapacity"],
+        #         # telemetry["delta_tires"][0],
+        #         # telemetry["delta_tires"][1],
+        #         # telemetry["delta_tires"][2],
+        #         # telemetry["delta_tires"][3],
+                
+                
+
+        #         #dane pomocnicze ciągłe
+        #         scoring["mAvgPathWetness"],
+        #         telemetry['mWheel'][0]['mWear'],  
+        #         telemetry["mWheel"][1]["mWear"],
+        #         telemetry["mWheel"][2]["mWear"],
+        #         telemetry["mWheel"][3]["mWear"],
+        #         curr_step,
+        #         telemetry["refueled_amount"]/telemetry["mFuelCapacity"],
+
+        #         # telemetry["mLastImpactET"],
+        #         telemetry["mLastImpactMagnitude"],
+        #         scoring["mNumPenalties"],
+        #         scoring["mRaining"],
+        #         round(scoring["mAmbientTemp"], 2),
+        #         round(scoring["mTrackTemp"], 2),
+        #         round(endET,5),
+
+        #         #dane dyskretne pomocniczne
+                
+        #         impact_flag,
+        #         telemetry["mDentSeverity"][0],  # Not defined which part of the car this refers to each index
+        #         telemetry["mDentSeverity"][1],
+        #         telemetry["mDentSeverity"][2], 
+        #         telemetry["mDentSeverity"][3],
+        #         telemetry["mDentSeverity"][4],
+        #         telemetry["mDentSeverity"][5],
+        #         telemetry["mDentSeverity"][6], 
+        #         telemetry["mDentSeverity"][7],
+
+        #         # has_last_lap,
+        #         scoring["mFinishStatus"],
+        #         scoring["mTotalLaps"],
+        #         scoring["mSector"],
+        #         scoring["mNumPitstops"],
+        #         int(scoring["mInPits"]),
+        #         telemetry["mFrontTireCompoundIndex"],
+        #         telemetry["multiplier"],
+        #         telemetry["changed_tires_flag"],
+        #         telemetry["is_repairing"],
+        #         # telemetry["refueled_flag"],
+        #         #DO PRZEWIDZENIA ale nie do X
+        #         telemetry["delta_fuel"]/telemetry["mFuelCapacity"],
+                
+        #         telemetry["delta_tires"][0],
+        #         telemetry["delta_tires"][1],
+        #         telemetry["delta_tires"][2],
+        #         telemetry["delta_tires"][3],
+
+        #         #ciągłe nie używane do trenowania
+        #         # last_lap,
+        #         # best_lap,
+                
+                
+        # ]
             data_state_per = [
-                #dane do przewidzenia
-                #dane ciągłe
-                
-                # scoring["mCurrLapTime"],
-                
-                # round(scoring["mLapDist"]/scoring["mTotalLapDistance"],5),
-                round(lap_dist_sin,5),
-                round(lap_dist_cos,5),
-                # round(scoring["mCurrentET"]/endET,5),
-
-                round(telemetry["mFuel"]/telemetry["mFuelCapacity"],5),
-                round(telemetry['mWheel'][0]['mWear'], 5),  # Average wear across all four tires
-                round(telemetry["mWheel"][1]["mWear"], 5),
-                round(telemetry["mWheel"][2]["mWear"], 5),
-                round(telemetry["mWheel"][3]["mWear"], 5),
-                round(sum(telemetry["mWheel"][0]["mTemperature"])/len(telemetry["mWheel"][0]["mTemperature"]), 5),
-                round(sum(telemetry["mWheel"][1]["mTemperature"])/len(telemetry["mWheel"][1]["mTemperature"]), 5),
-                round(sum(telemetry["mWheel"][2]["mTemperature"])/len(telemetry["mWheel"][2]["mTemperature"]), 5),
-                round(sum(telemetry["mWheel"][3]["mTemperature"])/len(telemetry["mWheel"][3]["mTemperature"]), 5),
+                #NO SCALER
+                lap_dist_sin,
+                lap_dist_cos,
+                telemetry["mFuel"]/telemetry["mFuelCapacity"],
                 scoring["mAvgPathWetness"],
-
-                #dane pomocnicze ciągłe
+                telemetry['mWheel'][0]['mWear'],  
+                telemetry["mWheel"][1]["mWear"],
+                telemetry["mWheel"][2]["mWear"],
+                telemetry["mWheel"][3]["mWear"],
                 curr_step,
-                round(telemetry["refueled_amount"],5)/telemetry["mFuelCapacity"],
-
-                # telemetry["mLastImpactET"],
-                telemetry["mLastImpactMagnitude"],
-                scoring["mNumPenalties"],
+                telemetry["refueled_amount"],
                 scoring["mRaining"],
-                round(scoring["mAmbientTemp"], 2),
-                round(scoring["mTrackTemp"], 2),
-                round(endET,5),
-
-                #dane dyskretne pomocniczne
-                
                 impact_flag,
+                # scoring["mFinishStatus"],
+                int(scoring["mInPits"]),
+                telemetry["changed_tires_flag"],
+                telemetry["is_repairing"],
+                #MIN-MAX SCALER
+                scoring["mNumPenalties"],
                 telemetry["mDentSeverity"][0],  # Not defined which part of the car this refers to each index
                 telemetry["mDentSeverity"][1],
                 telemetry["mDentSeverity"][2], 
@@ -303,25 +393,48 @@ def extract_state(telem_file_raw, scoring_file_raw):
                 telemetry["mDentSeverity"][5],
                 telemetry["mDentSeverity"][6], 
                 telemetry["mDentSeverity"][7],
-
-                # has_last_lap,
-                scoring["mFinishStatus"],
                 scoring["mTotalLaps"],
                 scoring["mSector"],
                 scoring["mNumPitstops"],
-                int(scoring["mInPits"]),
                 telemetry["mFrontTireCompoundIndex"],
                 telemetry["multiplier"],
-                telemetry["changed_tires_flag"],
-                telemetry["is_repairing"],
-                # telemetry["refueled_flag"],
+                #ROUBST SCALER
+                sum(telemetry["mWheel"][0]["mTemperature"])/len(telemetry["mWheel"][0]["mTemperature"]),
+                sum(telemetry["mWheel"][1]["mTemperature"])/len(telemetry["mWheel"][1]["mTemperature"]),
+                sum(telemetry["mWheel"][2]["mTemperature"])/len(telemetry["mWheel"][2]["mTemperature"]),
+                sum(telemetry["mWheel"][3]["mTemperature"])/len(telemetry["mWheel"][3]["mTemperature"]),
+                telemetry["mLastImpactMagnitude"],
+                scoring["mAmbientTemp"],
+                scoring["mTrackTemp"],
+                round(endET,5),
 
-                #ciągłe nie używane do trenowania
-                # last_lap,
-                # best_lap,
-                
-                
-        ]
+                #DLA Y
+                #NO SCALER
+                lap_dist_sin,
+                lap_dist_cos,
+                #MIN-MAX SCALER
+                telemetry["delta_fuel"],
+                telemetry["delta_tires"][0],
+                telemetry["delta_tires"][1],
+                telemetry["delta_tires"][2],
+                telemetry["delta_tires"][3],
+                #ROUBST SCALER
+                sum(telemetry["mWheel"][0]["mTemperature"])/len(telemetry["mWheel"][0]["mTemperature"]),
+                sum(telemetry["mWheel"][1]["mTemperature"])/len(telemetry["mWheel"][1]["mTemperature"]),
+                sum(telemetry["mWheel"][2]["mTemperature"])/len(telemetry["mWheel"][2]["mTemperature"]),
+                sum(telemetry["mWheel"][3]["mTemperature"])/len(telemetry["mWheel"][3]["mTemperature"]),
+
+
+            ]
+
+
+
+
+
+            
+            
+    
+          
             data_state.append(data_state_per)
 
        
@@ -334,13 +447,13 @@ def extract_state(telem_file_raw, scoring_file_raw):
 
 def save_to_db(telem_file_raw, scoring_file_raw):
     # przykładowe stany i akcje
-    states = extract_state(telem_file_raw, scoring_file_raw)
+    states_x = extract_state(telem_file_raw, scoring_file_raw)
 
-    print(len(states))
+    print(len(states_x))
 
 
     # zamieniamy listy na JSON
-    states_json = json.dumps(states)
+    states_json = json.dumps(states_x)
    
     # tworzymy bazę / tabelę
     conn = sqlite3.connect("data/db_states_for_regress/race_data_states.db")
