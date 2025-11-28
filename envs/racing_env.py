@@ -19,6 +19,8 @@ from config import X_SHAPE, Y_SHAPE, CONT_LENGTH, CAT_LENGTH
 
 data_race_scoring = "data/scoring_data.json"
 data_race_telemetry = "data/telemetry_data.json"
+probabilities = np.load('E:/pracadyp/Race-optimization-reinforcement-learning/data/probabilities_impact/probabilities.npy')
+bin_edges = np.load('E:/pracadyp/Race-optimization-reinforcement-learning/data/probabilities_impact/bin_edges.npy')
 
 class RacingEnv(gym.Env):
     def __init__(self):
@@ -90,19 +92,21 @@ class RacingEnv(gym.Env):
         self.impact_magnitude_history = []
         self.impact_flag_history = []
         self.dent_severity_history = []
-        self.dent_severity = [0.0]*8
+        self.dent_severity_change = [0.0]*8
         for i in range(self.total_steps):
 
-            impact_magnitude = random_impact_magnitude()
+            impact_magnitude = random_impact_magnitude(probabilities=probabilities, bin_edges=bin_edges)
             if impact_magnitude > 0.0:
                 impact_flag = 1.0
+                self.dent_severity_change = generate_dent_severity(impact_magnitude)
             else:
                 impact_flag = 0.0
+                self.dent_severity_change = [0.0]*8
                     
-            self.dent_severity = generate_dent_severity(impact_magnitude,self.dent_severity)
+            
             self.impact_magnitude_history.append(impact_magnitude)
             self.impact_flag_history.append(impact_flag)
-            self.dent_severity_history.append(self.dent_severity)
+            self.dent_severity_history.append(self.dent_severity_change)
                
 
 
@@ -216,7 +220,7 @@ class RacingEnv(gym.Env):
         self.ambient_temp = 0.0
         self.track_temp = 0.0
         self.end_et = 0.0
-        self.dent_severity = [0.0]*8
+        # self.dent_severity = [0.0]*8
         # self.has_last_lap = 0.0
         self.finish_status = 0.0
         self.laps = 0.0
@@ -229,6 +233,7 @@ class RacingEnv(gym.Env):
         self.h_c = None
         self.is_repairing = 0.0
         self.refueled_amount = 0.0
+        self.dent_severity = [0.0]*8
 
         # weather_conditions = generate_weather_conditions(1)
 
@@ -237,6 +242,12 @@ class RacingEnv(gym.Env):
         self.ambient_temp = weather_start["mAmbientTemp"]
         self.track_temp = weather_start["mTrackTemp"]
         self.path_wetness = weather_start["mPathWetness"]
+        self.dent_severity_change = self.dent_severity_history[0]
+
+        for i in range(8):
+            
+            self.dent_severity[i] += self.dent_severity_change[i]
+            self.dent_severity[i] = min(self.dent_severity[i], 2.0)
 
         self.end_et = 1932.0
         # self.race_complete_perc = 126.0 / self.end_et #Approxed delta for driving to start line(126s)
@@ -447,7 +458,7 @@ class RacingEnv(gym.Env):
 
             #Get back from [sin, cos] to lap distance
             LAP_DIST_norm = (np.atan2(data_lstm[0],data_lstm[1]) + 2 * np.pi) % (2 * np.pi) / (2 * np.pi)
-            print("LAP DIST NORM: ",LAP_DIST_norm)
+            # print("LAP DIST NORM: ",LAP_DIST_norm)
 
             diff = LAP_DIST_norm - self.lap_dist
             if diff > 0.5:
@@ -520,7 +531,8 @@ class RacingEnv(gym.Env):
                 done = True
                 reward += 100.0
                 reward += 50000 * self.laps / self.total_steps
-                self.make_plots()
+                if self.num_race < 6:
+                    self.make_plots()
                 self.history = []
                 break
 
@@ -533,6 +545,9 @@ class RacingEnv(gym.Env):
                     # if self.sector == 2:
                     #     reward = self.compute_reward(last_step)
                     # break
+            
+            
+
 
                 
             
@@ -543,8 +558,8 @@ class RacingEnv(gym.Env):
             if self.fuel_tank_capacity <= 0.05:
                 done = True
                 reward = -100.0
-                
-                self.make_plots()
+                if self.num_race < 6:
+                    self.make_plots()
                 self.history = []
                 break
             
@@ -594,6 +609,12 @@ class RacingEnv(gym.Env):
                 # 2. OBSŁUGA POSTOJU (Samochód stoi w miejscu)
                 # Warunek: Jesteśmy w strefie pitu, mamy flagę in_pits i procedura (pitted) jeszcze nie zakończona
                 if data_lstm[0] > pit_zone_start and self.in_pits == 1.0 and not self.pitted:
+                    
+                    #Stop impact and dent updates during pitstop
+                    self.impact_flag_history[self.curr_step] = 0.0
+                    self.impact_magnitude_history[self.curr_step] = 0.0
+                    self.dent_severity_history[self.curr_step] = 8 * [0.0]
+
                     
                     if self.pit_stage == 0:
                         self.pit_snapshot = data_lstm.copy()
@@ -666,7 +687,7 @@ class RacingEnv(gym.Env):
                             total_repair_time = 0
                             for i in range(len(self.dent_severity)):
                                 if self.dent_severity[i] > 0.0:
-                                    total_repair_time += repair_weights[i]
+                                    total_repair_time += repair_weights[i] * self.dent_severity[i]
                             
                             self.pit_timer = total_repair_time
                             self.is_repairing = 1.0
@@ -706,8 +727,16 @@ class RacingEnv(gym.Env):
 
             self.last_impact_magnitude = self.impact_magnitude_history[self.curr_step]
             self.impact_flag = self.impact_flag_history[self.curr_step]
-            self.dent_severity = self.dent_severity_history[self.curr_step]
+            # self.dent_severity = self.dent_severity_history[self.curr_step]
 
+            self.dent_severity_change = self.dent_severity_history[self.curr_step]
+
+            for i in range(8):
+                
+                self.dent_severity[i] += self.dent_severity_change[i]
+                self.dent_severity[i] = min(self.dent_severity[i], 2.0)
+
+            
             # weather_conditions = generate_weather_conditions(1,self.raining,self.ambient_temp,self.track_temp)
             weather_conditions = self.weather_conditions[self.curr_step]
 
@@ -732,8 +761,8 @@ class RacingEnv(gym.Env):
             # self.path_wetness = data_lstm[10]
             self.curr_step += 1
 
-            if self.curr_step % 100 == 0:
-                print(f"Step: {self.curr_step}/{self.total_steps}")
+            # if self.curr_step % 100 == 0:
+            #     print(f"Step: {self.curr_step}/{self.total_steps}")
 
             
 
@@ -801,38 +830,38 @@ class RacingEnv(gym.Env):
 
             # print(self.state)
 
-            obs = np.array([
-                self.lap_dist,
-                self.fuel_tank_capacity,
-                self.wheel1_wear,
-                self.wheel2_wear,
-                self.wheel3_wear,
-                self.wheel4_wear,
-                self.wheel1_temp,
-                self.wheel2_temp,
-                self.wheel3_temp,
-                self.wheel4_temp,
-                self.path_wetness,
-                self.num_penalties,
-                self.raining,
-                self.ambient_temp,
-                self.track_temp,
-                self.end_et,
-                self.dent_severity[0],
-                self.dent_severity[1],
-                self.dent_severity[2],
-                self.dent_severity[3],
-                self.dent_severity[4],
-                self.dent_severity[5],
-                self.dent_severity[6],
-                self.dent_severity[7],
-                self.laps,
-                self.sector,
-                self.num_pit_stops,
-                self.tire_compound_index,
-                self.usage_multiplier
-                
-            ], dtype=np.float32)
+        obs = np.array([
+            self.lap_dist,
+            self.fuel_tank_capacity,
+            self.wheel1_wear,
+            self.wheel2_wear,
+            self.wheel3_wear,
+            self.wheel4_wear,
+            self.wheel1_temp,
+            self.wheel2_temp,
+            self.wheel3_temp,
+            self.wheel4_temp,
+            self.path_wetness,
+            self.num_penalties,
+            self.raining,
+            self.ambient_temp,
+            self.track_temp,
+            self.end_et,
+            self.dent_severity[0],
+            self.dent_severity[1],
+            self.dent_severity[2],
+            self.dent_severity[3],
+            self.dent_severity[4],
+            self.dent_severity[5],
+            self.dent_severity[6],
+            self.dent_severity[7],
+            self.laps,
+            self.sector,
+            self.num_pit_stops,
+            self.tire_compound_index,
+            self.usage_multiplier
+            
+        ], dtype=np.float32)
 
         return obs, reward, done, self.state[11], {}
 

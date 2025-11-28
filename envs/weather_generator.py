@@ -18,6 +18,11 @@ def generate_weather_conditions(num_conditions,mRaining_start=0.0,mAmbientTemp_s
     how_quickly = 0
     how_quickly_track = 0
     target_track_temp = mTrackTemp
+    gap_timer = 0
+    target_wetness = 0.0
+    last_raining_value = mRaining
+    next_temp = mAmbientTemp  # Na start cel jest taki sam jak obecna temp
+    smoothing_speed = 0.005
     for _ in range(num_conditions):
         condition = {
             "mRaining": round(mRaining, 2),
@@ -29,49 +34,85 @@ def generate_weather_conditions(num_conditions,mRaining_start=0.0,mAmbientTemp_s
         weather_conditions.append(condition)
 
         # Deszcz: jeśli nie pada, bardzo mała szansa na start
-        if mRaining < 0.01:
-            if random() < 0.001:  # 1% szansy na początek deszczu
-                mRaining = uniform(0.1, 1.0)
-                raining_change_flag = True  # <--- DODAJ TO
-                raining_change = mRaining
-                # Oblicz opóźnienie dla pierwszego deszczu (zanim tor zmoknie)
-                # gap_rain_wetness = round(randint(5, 15) * (50 - mAmbientTemp), 0)
-        else:
-            # Jeśli pada, powolna zmiana intensywności
-            if raining_time > 100 and random() < 0.01:
-                raining_change = choice([-0.1,-0.2,-0.05, 0.05, 0.1, 0.2])
-                mRaining = min(1, max(0, mRaining + raining_change))
-                raining_change_flag = True
-                
-
         
+
+        # --- PĘTLA GŁÓWNA (np. update frame) ---
+
+        # 1. LOGIKA ZMIANY POGODY (Twoja logika z małymi poprawkami)
+        if mRaining < 0.01:
+            # Start deszczu
+            if random() < 0.001: 
+                mRaining = uniform(0.1, 1.0)
+        else:
+            # Zmiana intensywności w trakcie deszczu
+            if raining_time > 100 and random() < 0.01:
+                raining_change = choice([-0.1, -0.2, -0.05, 0.05, 0.1, 0.2])
+                mRaining = min(1.0, max(0.0, mRaining + raining_change))
+
             raining_time += 1
-         
-            if random() < 0.005 and raining_time > 300: #mRaining < 0.05 
+            
+            # Koniec deszczu
+            if random() < 0.005 and raining_time > 300: 
                 raining_time = 0
                 mRaining = 0.0
-            
-                mPathWetness = mRaining 
-        if raining_change_flag:
-            if raining_change > 0:
-                gap_rain_wetness = round(randint(2, 8) * mAmbientTemp, 0)
-            elif raining_change < 0:
-                temp_factor = max(1, 50 - mAmbientTemp) # Zabezpieczenie, żeby nie zeszło poniżej 1
-                gap_rain_wetness = round(randint(2, 8) * temp_factor, 0)
-            
-            if gap_rain_wetness > 0:
-                gap_rain_wetness -= 1
-            else:
-                mPathWetness = mRaining
-                raining_change_flag = False
-        
-        if mAmbientTemp == next_temp:
-            next_temp = mAmbientTemp + choice([-2, -1, 0, 1, 2])
-            how_quickly = randint(50, 200)
-            change_per_step = round((next_temp - mAmbientTemp) / how_quickly, 2)
 
-        mAmbientTemp += change_per_step
-        mAmbientTemp = min(40, max(5, mAmbientTemp))
+        # 2. WYKRYCIE ZMIANY (Trigger)
+        # Sprawdzamy, czy cel się zmienił (czy zmieniło się mRaining)
+        if mRaining != last_raining_value:
+            target_wetness = mRaining
+            last_raining_value = mRaining
+            
+            # Obliczamy opóźnienie TYLKO RAZ przy zmianie
+            if target_wetness > mPathWetness:
+                # MOKNIĘCIE (Wetting)
+                # Gorący tor (30C) = duży mnożnik = długo moknie (parowanie)
+                # Zimny tor (10C) = mały mnożnik = szybko moknie
+                temp_factor = max(1, mAmbientTemp) 
+                gap_timer = round(randint(2, 5) * temp_factor, 0)
+                
+            else:
+                # SCHNIĘCIE (Drying)
+                # Gorący tor (30C) -> (50-30)=20 -> schnie szybko (mały delay)
+                # Zimny tor (10C) -> (50-10)=40 -> schnie wolno (duży delay)
+                temp_factor = max(1, 50 - mAmbientTemp)
+                gap_timer = round(randint(5, 10) * temp_factor, 0)
+
+        # 3. OBSŁUGA OPÓŹNIENIA (Step logic)
+        if gap_timer > 0:
+            gap_timer -= 1
+        else:
+            # Czas minął - następuje "skok" wartości (schodkowo)
+            mPathWetness = target_wetness
+        
+        # if mAmbientTemp == next_temp:
+        #     next_temp = mAmbientTemp + (choice([-2, -1, 0]) if mAmbientTemp > 40 else (choice([0, 1, 2]) if mAmbientTemp < 9 else choice([-2, -1, 0, 1, 2])))
+        #     how_quickly = randint(50, 200)
+        #     change_per_step = round((next_temp - mAmbientTemp) / how_quickly, 2)
+
+        # mAmbientTemp += change_per_step
+        # mAmbientTemp = min(40, max(5, mAmbientTemp))
+
+        if abs(mAmbientTemp - next_temp) < 0.1:
+    
+    # Losujemy nowy cel (Twoja logika z drobnym uproszczeniem)
+            if mAmbientTemp > 40:
+                change = choice([-3, -2, -1, 0])      # Musi spadać
+            elif mAmbientTemp < 9:
+                change = choice([0, 1, 2, 3])          # Musi rosnąć
+            else:
+                change = choice([-2, -1, 0, 1, 2])     # Losowo
+                
+            next_temp = mAmbientTemp + change
+        
+        # Opcjonalnie: Zmień prędkość zmiany przy każdym nowym celu, żeby było ciekawiej
+        # smoothing_speed = uniform(0.001, 0.008)
+
+        # 2. Fizyka zmiany (LERP)
+        # To jedno proste równanie zastępuje change_per_step i how_quickly
+        mAmbientTemp += (next_temp - mAmbientTemp) * smoothing_speed
+
+        # 3. Bezpiecznik (Clamp)
+        mAmbientTemp = min(45, max(5, mAmbientTemp))
 
         # --- 3. Temperatura Toru (FIZYKA) ---
         
