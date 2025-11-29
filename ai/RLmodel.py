@@ -322,7 +322,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
 buffer = RolloutBuffer()
 all_total_rewards = []
 num_epochs = 500
-last_step = 0
+
 
 
 try:
@@ -351,7 +351,7 @@ for epoch in range(num_epochs):
         actions, log_prob, value = select_action(model, obs)
         
         # Wykonaj akcję. 
-        next_obs, reward, done, last_step, _ = env.step(actions, last_step)
+        next_obs, reward, done, _ = env.step(actions)
 
         next_obs = scale_single_input(next_obs, scaler_minmax_X, scaler_robust_X)
 

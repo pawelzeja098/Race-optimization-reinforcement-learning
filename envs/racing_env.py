@@ -349,39 +349,9 @@ class RacingEnv(gym.Env):
 
         return obs
     
-    # def start_configuration(self,action):
-    #     self.tire_compound_index = action[1] - 1.0
-    #     self.fuel_tank_capacity = max(action[3] * 0.05, 1.0)
-    #     self.wheel1_wear = 1.0
-    #     self.wheel2_wear = 1.0
-    #     self.wheel3_wear = 1.0
-    #     self.wheel4_wear = 1.0
-    #     self.wheel1_temp = 300.0
-    #     self.wheel2_temp = 300.0
-    #     self.wheel3_temp = 300.0
-    #     self.wheel4_temp = 300.0
 
-
-    def compute_reward(self,last_step):
-        # reward = 0.0
-        # if self.sector == 0.0:
-        #     lap_time = self.end_et * self.race_complete_perc
-        # elif self.sector == 1.0:
-        #     last_race_state = last_step
-        #     curr_race_state = self.curr_step/self.total_steps
-        #     curr_delta = curr_race_state - last_race_state
-        #     reward = (curr_delta - self.delta) * 100.0
-        #     self.delta = curr_delta
-        #     # reward += delta * 100.0
-            
-        #     # if self.fuel_tank_capacity <= 0.05:
-        #     #     reward -= 50.0
-        #     # if self.wheel1_wear >= 0.2 or self.wheel2_wear >= 0.2 or self.wheel3_wear >= 0.2 or self.wheel4_wear >= 0.2:
-        #     #     reward -= 20.0
-        # elif self.finish_status == 1.0:
-        #     reward += 100.0
-        #     reward += 50000 * self.laps / self.total_steps
-        # return reward
+    def compute_reward(self):
+     
         reward = 0.0
         steps_this_lap = self.curr_step - self.last_lap_step
         reward += 100 + (1000 - steps_this_lap) * 0.1  # 606 is median steps per lap
@@ -389,7 +359,7 @@ class RacingEnv(gym.Env):
 
              
 
-    def step(self,action,last_step):
+    def step(self,action):
         """One step of the environment's dynamics.(NOT ONE LAP)"""
         prev_sector = self.sector
         
@@ -423,7 +393,7 @@ class RacingEnv(gym.Env):
                 if self.laps == 0:
                     reward = 0.0
                 else:
-                    reward = self.compute_reward(last_step)
+                    reward = self.compute_reward()
             
             if (prev_sector == 2.0 and self.sector == 0.0):
                 
@@ -439,19 +409,6 @@ class RacingEnv(gym.Env):
             
             #Get lstm predictions
             data_lstm, self.h_c = generate_predictions(self.LSTM_model, self.state,self.scaler_minmax_X, self.scaler_robust_X, self.scaler_minmax_Y, self.scaler_robust_Y,self.h_c)
-
-            # # 1. Oblicz surowy kąt z predykcji (-pi do +pi)
-            # pred_angle = np.atan2(data_lstm[0], data_lstm[1])
-
-            # # 2. "Rozwiń" kąt względem poprzedniego
-            # # np.unwrap oczekuje tablicy, więc dajemy mu parę [stary, nowy] i bierzemy ostatni
-            # new_continuous_angle = np.unwrap([self.current_angle_radians, pred_angle])[1]
-
-            # # 3. Zaktualizuj stan ciągły
-            # self.current_angle_radians = new_continuous_angle
-
-            # # 4. Na potrzeby wejścia modelu (0..1) znormalizuj modulo
-            # self.lap_dist = (self.current_angle_radians % (2 * np.pi)) / (2 * np.pi)
 
             #Get back from [sin, cos] to lap distance
             LAP_DIST_norm = (np.atan2(data_lstm[0],data_lstm[1]) + 2 * np.pi) % (2 * np.pi) / (2 * np.pi)
@@ -477,34 +434,13 @@ class RacingEnv(gym.Env):
 
             self.fuel_tank_capacity = self.fuel_tank_capacity - data_lstm[1]/tank_capacity_max
 
-            # if data_lstm[1] < 0.0:
-            #     data_lstm[1] = 0.0
-
-            # if len(self.history) > 0:
-            #     if data_lstm[1] > self.history[-1][1] and self.refueled_flag != 1.0:
-                   
-            #         data_lstm[1] = self.history[-1][1] - 0.001
-                
-            #     for i in range(2,6):
-            #         if data_lstm[i] > self.history[-1][i] and self.changed_tires_flag != 1.0:
-                        
-            #             data_lstm[i] = self.history[-1][i] - 0.001
-
-            #Clipping values to valid ranges
-            # for i in range(2, 6):
-            #     if data_lstm[i] > 1.0:
-            #         data_lstm[i] = 1.0
-            
-
-            # if data_lstm[10] < 0.0:
-            #     data_lstm[10] = 0.0
+          
 
             sectors = {1: (0.0, 0.14),
                     2: (0.14, 0.56),
                     0: (0.56, 1.0)}
             threshold = 0.97
-            # print("LAP DIST: ",data_lstm[0])
-            # print("Race DIST: ",data_lstm[1])
+     
             
             #Check if lap ended       
             if (data_lstm[0] > 0.0) and (data_lstm[0] < 0.05) and self.curr_step > 30:
@@ -515,15 +451,7 @@ class RacingEnv(gym.Env):
                         self.has_last_lap = 1.0
             else:
                 self.lap_checked = False
-            #Check if race is finished
-            # if data_lstm[1] >= 1.0 and data_lstm[0] > threshold:
-            #     finish_status = 1.0
-            #     if finish_status == 1.0:
-            #         # reward = 1000.0
-            #         done = True
-            #         pass
-
-            #Check if max steps reached
+        
            
 
 
@@ -699,14 +627,7 @@ class RacingEnv(gym.Env):
                     data_lstm[0] += 0.0005  # Powolne ruszanie (zwiększanie dystansu)
                     # data_lstm[1] -= 0.001   # Symulacja zużycia paliwa
                     
-                    # Lekkie zużycie opon, żeby input nie był "martwy" (same 1.0)
-                    # for i in range(2, 6):
-                    #     data_lstm[i] -= 0.0001
-            # impact_magnitude = random_impact_magnitude()
-            # if impact_magnitude > 0.0:
-            #     self.last_impact_et = abs(data_lstm[1] * self.end_et  - self.prev_et)
-                
-            # self.dent_severity = generate_dent_severity(impact_magnitude,self.dent_severity)
+        
 
             self.last_impact_magnitude = self.impact_magnitude_history[self.curr_step]
             self.impact_flag = self.impact_flag_history[self.curr_step]
@@ -731,12 +652,6 @@ class RacingEnv(gym.Env):
                             
 
             self.lap_dist = data_lstm[0]
-            # # self.race_complete_perc = data_lstm[1]
-            # self.fuel_tank_capacity = data_lstm[1]
-            # self.wheel1_wear = data_lstm[2]
-            # self.wheel2_wear = data_lstm[3]
-            # self.wheel3_wear = data_lstm[4]
-            # self.wheel4_wear = data_lstm[5]
             self.wheel1_temp = data_lstm[6]
             self.wheel2_temp = data_lstm[7]
             self.wheel3_temp = data_lstm[8]
@@ -847,7 +762,7 @@ class RacingEnv(gym.Env):
             
         ], dtype=np.float32)
 
-        return obs, reward, done, self.state[11], {}
+        return obs, reward, done, {}
 
 
 
@@ -1087,42 +1002,6 @@ class RacingEnv(gym.Env):
         plt.legend()
         plt.grid(True)
 
-       
-
-        
-
-        # 28. Has Last Lap
-        # plt.subplot(6, 7, 16)
-        # plt.plot(history_array[:, 28], label='Has Last Lap', color='pink')
-        # plt.title('Has Last Lap')
-        # plt.xlabel('Time Steps')
-        # plt.ylabel('0/1')
-        # plt.legend()
-        # plt.grid(True)
-
-        # # 29. Finish Status
-        # plt.subplot(6, 7, 17)
-        # plt.plot(history_array[:, 28], label='Finish Status', color='gold')
-        # plt.title('Finish Status')
-        # plt.xlabel('Time Steps')
-        # plt.ylabel('0/1')
-        # plt.legend()
-        # plt.grid(True)
-
-        
-
-        
-
-       
-
-        
-
-       
-
-       
-
-       
-
         plt.tight_layout()
         plt.savefig(f'ai/rl_training_race_historyplots/race_history_plots_{self.num_race}.png', dpi=150)
         # plt.show()
@@ -1131,246 +1010,3 @@ class RacingEnv(gym.Env):
         
 
 
-
-#      Sektor zmienił się na 1.0 przy dystansie -0.01213
-# Sektor zmienił się na 2.0 przy dystansie 0.13955
-# Sektor zmienił się na 0.0 przy dystansie 0.5677
-# Sektor zmienił się na 1.0 przy dystansie 0.00034
-# Sektor zmienił się na 2.0 przy dystansie 0.14061
-# Sektor zmienił się na 0.0 przy dystansie 0.56768
-# Sektor zmienił się na 1.0 przy dystansie 0.00111
-
- # def _extract_state(self, telemetry, scoring):
-    #         wear = 0
-    #         for wheel in telemetry["mWheel"]:
-    #             # Process each wheel's telemetry data
-    #             #for now only wear
-    #             wear += wheel["mWear"]
-            
-    #         last_lap = scoring["mLastLapTime"]
-    #         has_last_lap = 1.0 if last_lap > 0 else 0.0
-    #         if last_lap <= 0.0:
-    #             last_lap = 10000.0  # placeholder
-            
-                
-
-    #         return np.array([
-    #             last_lap,
-    #             has_last_lap,
-    #             scoring["mBestLapTime"],
-    #             # scoring["mCurrLapTime"],
-    #             int(scoring["mInPits"]),
-    #             scoring["mNumPitstops"],
-    #             scoring["mRaining"],
-    #             round(scoring["mAmbientTemp"], 2),
-    #             round(scoring["mTrackTemp"], 2),
-    #             scoring["mEndET"],
-    #             scoring["mCurrentET"],
-
-    #             round(telemetry["mFuel"],2),
-    #             round(telemetry["mFuelCapacity"],2),
-    #             round(wear / 4.0, 2),  # Average wear across all four tires
-    #             telemetry["mDentSeverity"][0],  # Not defined which part of the car this refers to each index
-    #             telemetry["mDentSeverity"][1],
-    #             telemetry["mDentSeverity"][2], 
-    #             telemetry["mDentSeverity"][3],
-    #             telemetry["mDentSeverity"][4],
-    #             telemetry["mDentSeverity"][5],
-    #             telemetry["mDentSeverity"][6], 
-    #             telemetry["mDentSeverity"][7],
-
-    #             telemetry["mFrontTireCompoundIndex"],
-    #             self.usage_multiplier
-                
-    #     ], dtype=np.float32)
-
-
-
-
-               
-            #     if data_lstm[0] > 80.0/lap_dist_max and self.in_pits == 1.0 and not self.pitted:
-            #         data_lstm[0] = 0.006
-            #         if action[1] > 0 and not changed_tires_in_pit:  # Tire change
-            #             self.tire_compound_index = action[1] - 1.0
-            #             self.changed_tires_flag = 1.0
-            #             gap_between_tires = 8
-            #             for i in range(2,6):
-            #                 data_lstm[i] = 1.0
-            #             changed_tires_in_pit = True
-                    
-            #         if action[3] * 0.05 >= self.fuel_tank_capacity:  # Refuel
-            #             if gap_between_tires > 0:
-                            
-            #                 waiting_for_fuel = True
-            #             # self.fuel_tank_capacity = min(action[3] * 0.05, self.fuel_tank_capacity)
-            #             else:
-            #             # self.refueled_flag = 1.0
-            #                 waiting_for_fuel = False
-                            
-            #                 self.refueled_amount = max(max(1.6001, action[3] * 0.05 - self.fuel_tank_capacity), 0)
-            #                 data_lstm[1] += self.refueled_amount
-
-            #                 if action[3] * 0.05 >= self.fuel_tank_capacity and action[2] != 1:
-            #                     self.pitted = True
-
-            #         if action[2] == 1 and not waiting_for_fuel and any(np.array(self.dent_severity) > 0.0): # Repair
-            #             if gap_between_tires > 0 or self.refueled_amount > 0.0:
-            #                 a = 0
-            #                 # continue
-            #             else:
-            #                 if self.is_repairing == 0.0:
-            #                     for i in range(len(self.dent_severity)):
-            #                         if self.dent_severity[i] > 0.0:
-            #                             repair_time += repair_weights[i]
-                                
-            #                 if repair_time > 0:
-            #                     self.is_repairing = 1.0
-            #                     repair_time -= 1
-            #                 else:    
-            #                     self.is_repairing = 0.0
-            #                     for i in range(len(self.dent_severity)):
-            #                         self.dent_severity[i] = 0.0
-            #                     self.pitted = True
-            #         if gap_between_tires > 0:
-            #             gap_between_tires -= 1
-            #             if action[2] != 1 and action[3] * 0.05 >= self.fuel_tank_capacity:
-            #                 self.pitted = True
-            #         # self.pitted = True
-            #         # self.num_pit_stops += 1.0
-            #     elif data_lstm[0] > 80.0/lap_dist_max and self.in_pits == 1.0 and self.pitted:
-            #         data_lstm[0] += 0.00047 # Tyle gdzieś porusza sie pojazd/step z prędkością 60 km/h
-            #         data_lstm[1] -= 0.001
-            #         for i in range(2,6):
-            #             data_lstm[i] -= 0.0001
-                    
-            # else:
-            #     self.in_pits = 0.0
-            #     self.checked_pit = False
-            #     self.pitted = False
-            #     changed_tires_in_pit = False
-    
-
-    #  def pit_handling(self):
-        
-
-    #     pit_zone_start = 80.0 / lap_dist_max 
-    #     in_pit_lane = (pit_entry_line_dist <= data_lstm[0] <= 1.01 or 0 <= data_lstm[0] <= pit_exit_line_dist)
-
-    #     if in_pit_lane and self.laps != 0:
-    #         self.in_pits = 1.0
-    #         if not self.checked_pit:
-    #             self.checked_pit = True
-    #             # Resetujemy stan pitstopu przy wjeździe
-    #             self.pit_stage = 0  
-    #             self.pit_timer = 0
-    #             self.pitted = False 
-    #     else:
-    #         # Wyjazd z pitu / Jazda po torze
-    #         if self.in_pits == 1.0:
-    #             self.num_pit_stops += 1.0
-    #         self.in_pits = 0.0
-    #         self.checked_pit = False
-    #         self.pitted = False
-    #         self.pit_stage = 0
-
-    #     # 2. OBSŁUGA POSTOJU (Samochód stoi w miejscu)
-    #     # Warunek: Jesteśmy w strefie pitu, mamy flagę in_pits i procedura (pitted) jeszcze nie zakończona
-    #     if data_lstm[0] > pit_zone_start and self.in_pits == 1.0 and not self.pitted:
-            
-    #         if self.pit_stage == 0:
-    #             self.pit_snapshot = data_lstm.copy()
-
-    #         if self.pit_stage != 2.5:
-    #             data_lstm[1] = self.pit_snapshot[1] #constant fuel level during pitstop
-            
-    #         # ZATRZYMANIE POJAZDU
-    #         data_lstm[0] = 0.006  # Ustawienie pozycji "w boksie" (upewnij się, że to nie teleportuje auta w złe miejsce!)
-
-    #         # --- FAZA 1: OPONY ---
-    #         if self.pit_stage == 0:
-    #             if action[1] > 0: # Jeśli jest żądanie zmiany opon
-    #                 self.pit_timer = 8 # Czas trwania wymiany
-    #                 self.tire_compound_index = action[1] - 1.0
-    #                 self.changed_tires_flag = 1.0
-    #                 for i in range(2, 6):
-    #                     data_lstm[i] = 1.0 # Reset zużycia opon w danych LSTM
-    #                 self.pit_stage = 1 # Przechodzimy do wykonywania
-    #             else:
-    #                 self.pit_stage = 2 # Pomijamy opony, idziemy do paliwa
-
-    #         elif self.pit_stage == 1: # Wykonywanie zmiany opon
-    #             if self.pit_timer > 0:
-    #                 self.pit_timer -= 1
-    #             else:
-    #                 # Koniec wymiany opon - resetujemy zużycie
-                    
-                    
-    #                 self.pit_stage = 2 # Przejście do paliwa
-
-    #         # --- FAZA 2: PALIWO ---
-    #         elif self.pit_stage == 2:
-    #             target_fuel = action[3] * 0.05
-    #             current_fuel = self.fuel_tank_capacity # lub data_lstm[1] zależnie jak przechowujesz
-    #             fuel_needed = target_fuel - current_fuel
-
-    #             if fuel_needed > 0:
-    #                 # Obliczamy czas tankowania (np. 1 litr = 1 step)
-    #                 # Możesz też tankować "po trochu" w każdej klatce
-    #                 # self.pit_timer = int(fuel_needed * 10) # Przykładowy przelicznik czasu
-    #                  # Do statystyk
-    #                 self.pit_stage = 2.5 # Wykonywanie tankowania (stan pośredni)
-    #             else:
-    #                 self.pit_stage = 3 # Nie trzeba tankować, idziemy do napraw
-
-    #         elif self.pit_stage == 2.5: # Wykonywanie tankowania
-    #             if fuel_needed > 0:
-    #                 current_fuel = self.fuel_tank_capacity
-    #                 fuel_needed = target_fuel - current_fuel
-    #                 # self.pit_timer -= 1
-    #                 self.refueled_amount = max(max(1.6001, fuel_needed), 0) / tank_capacity_max
-    #                 data_lstm[1] += self.refueled_amount
-    #                 self.pit_snapshot[1] = data_lstm[1]
-                
-    #             else:
-    #                 # Koniec tankowania - dolewamy całość (lub resztę)
-    #                 # data_lstm[1] += self.refueled_amount 
-    #                 self.pit_stage = 3 # Przejście do napraw
-
-    #         # --- FAZA 3: NAPRAWY ---
-    #         elif self.pit_stage == 3:
-    #             if action[2] == 1 and any(np.array(self.dent_severity) > 0.0):
-    #                 # Oblicz czas naprawy TYLKO RAZ
-    #                 total_repair_time = 0
-    #                 for i in range(len(self.dent_severity)):
-    #                     if self.dent_severity[i] > 0.0:
-    #                         total_repair_time += repair_weights[i]
-                    
-    #                 self.pit_timer = total_repair_time
-    #                 self.is_repairing = 1.0
-    #                 self.pit_stage = 3.5 # Wykonywanie napraw
-    #             else:
-    #                 self.pit_stage = 4 # Brak napraw, koniec
-
-    #         elif self.pit_stage == 3.5: # Wykonywanie napraw
-    #             if self.pit_timer > 0:
-    #                 self.pit_timer -= 1
-    #             else:
-    #                 # Koniec napraw - resetujemy uszkodzenia
-    #                 self.is_repairing = 0.0
-    #                 for i in range(len(self.dent_severity)):
-    #                     self.dent_severity[i] = 0.0
-    #                 self.pit_stage = 4 # Koniec
-
-    #         # --- FAZA 4: FINALIZACJA ---
-    #         elif self.pit_stage == 4:
-    #             self.pitted = True # Zwalnia blokadę, auto może ruszyć
-
-    #     # 3. POWOLNY START ("WAKE UP" LSTM)
-    #     elif data_lstm[0] > pit_zone_start and self.in_pits == 1.0 and self.pitted:
-    #         # Tutaj "oszukujemy" LSTM, powoli zmieniając parametry, żeby zaczął "czuć" jazdę
-    #         data_lstm[0] += 0.0005  # Powolne ruszanie (zwiększanie dystansu)
-    #         data_lstm[1] -= 0.001   # Symulacja zużycia paliwa
-            
-    #         # Lekkie zużycie opon, żeby input nie był "martwy" (same 1.0)
-    #         for i in range(2, 6):
-    #             data_lstm[i] -= 0.0001
