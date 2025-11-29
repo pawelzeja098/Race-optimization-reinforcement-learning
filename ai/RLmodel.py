@@ -55,20 +55,7 @@ class  ActorCritic(nn.Module):
         state_value = self.critic(x)
         return action_probs, state_value
 
-# def select_action(model,state):
-#     state = torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(device)  # [1, obs_dim]
-#     action_probs_list, state_value = model(state)  # lista tensorów [1, num_options]
 
-#     actions = []
-#     log_probs = []
-
-#     for probs in action_probs_list:
-#         probs = probs.squeeze(0)  # usuń batch dimension -> [num_options]
-#         action = torch.multinomial(probs, num_samples=1).item()
-#         actions.append(action)
-#         log_probs.append(torch.log(probs[action]))
-
-#     return actions, log_probs, state_value
 
 def select_action(model, state):
     """
@@ -419,25 +406,4 @@ plt.legend()
 plt.grid(True)
 plt.show()
 
-# env = RacingEnv()
-
-# obs_dim = env.observation_space.shape[0]  # lub inny rozmiar zgodny z obserwacją
-# action_space = env.action_space  # Twoje rozmiary akcji
-
-# model = PolicyNetwork(obs_dim,action_space)
-# obs = env.reset()
-# done = False
-# env.step(action_space)
-# obs = env.state
-# while not done:
-#     obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0)  # dodaj batch
-
-#     # Weź rozkłady prawdopodobieństw
-#     action_probs = model(obs_tensor)
-
-#     # Wylosuj akcje z rozkładów
-#     actions = [torch.multinomial(probs, num_samples=1).item() for probs in action_probs]
-
-#     # Zrealizuj akcję w środowisku
-#     obs, reward, done, info = env.step(actions)
 

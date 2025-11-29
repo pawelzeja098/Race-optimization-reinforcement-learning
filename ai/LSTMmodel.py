@@ -129,15 +129,6 @@ def scale_input(X, Y, scaler_X_min_max, scaler_X_robust, scaler_Y_min_max, scale
 
     return X_scaled_grouped, Y_scaled_grouped
 
-# def scale_single_input(x, scaler_X):
-#     cont_indices_x = slice(0, 19)   # continuous columns for X
-#     X_scaled_grouped = []
-
-#     for x_seq in x:
-#         x_scaled = np.array(x_seq, dtype=float)
-#         x_scaled[:, cont_indices_x] = scaler_X.transform(x_seq[:, cont_indices_x])
-#         X_scaled_grouped.append(x_scaled)
-#     return X_scaled_grouped
 
 def scale_single_input(raw_vector_x, scaler_X_min_max, scaler_X_robust):
     """
@@ -163,23 +154,6 @@ def scale_single_input(raw_vector_x, scaler_X_min_max, scaler_X_robust):
     # i spłaszczamy z powrotem do 1D (37,)
     return np.hstack([x_no_scaled, x_min_max_scaled, x_robust_scaled]).flatten()
        
-
-# def create_window_pred(sequence_x, window_size, n_steps_ahead=5):
-#     X, Y = [], []
-#     sequence_x = np.array(sequence_x)
-#     curr_len = len(sequence_x)
-
-#     start = max(0, curr_len - window_size)
-#     window = sequence_x[start:curr_len]
-
-#     pad_len = window_size - len(window)
-#     if pad_len > 0:
-#         window = np.vstack([np.zeros((pad_len, sequence_x.shape[1])), window])
-
-#     # dodaj batch dimension
-#     X = window[np.newaxis, :, :]  # shape [1, window_size, num_features]
-#     return X
-
 
 
 def generate_predictions(model, input_seq,scaler_X_min_max=None, scaler_X_robust=None, scaler_Y_min_max=None, scaler_Y_robust=None,h_c=None):
@@ -263,27 +237,6 @@ def create_x_y(data):
 
     return X_grouped, Y_grouped
 
-def create_windows(sequence_x, sequence_y, window_size, n_steps_ahead=5):
-    X, Y = [], []
-    for t in range(1, len(sequence_x)):
-        start = max(0, t - window_size)
-        window = sequence_x[start:t]
-
-        # padding na początku, jeśli okno krótsze niż window_size
-        pad_len = window_size - len(window)
-        if pad_len > 0:
-            window = np.vstack([np.zeros((pad_len, sequence_x.shape[1])), window])
-        X.append(window)
-
-        # Y: wypełniamy zerami, jeśli końcówka wyścigu ma mniej niż n_steps_ahead
-        y_window = sequence_y[t:t+n_steps_ahead]
-        if y_window.shape[0] < n_steps_ahead:
-            pad = np.zeros((n_steps_ahead - y_window.shape[0], sequence_y.shape[1]))
-            y_window = np.vstack([y_window, pad])
-        Y.append(y_window)
-
-    return np.array(X), np.array(Y)
-
 def create_sliding_windows(races_x_list, races_y_list, sequence_length, step=1):
     """
     Tworzy próbki (X, Y) metodą przesuwnego okna dla Teacher Forcing.
@@ -338,38 +291,17 @@ def train_model():
 
     X_train, Y_train = scale_input(X,Y,scaler_X_min_max, scaler_X_robust, scaler_Y_min_max, scaler_Y_robust)
     
-    # n_steps_ahead = 5  # number of future steps to predict
-
-
-    # all_X, all_Y = [], []
-    # for race_x, race_y in zip(X_train, Y_train):  
-    #     X_r, Y_r = create_windows(race_x, race_y, window_size=30, n_steps_ahead=n_steps_ahead)
-    #     all_X.append(X_r)
-    #     all_Y.append(Y_r)
-
+   
     print("Tworzenie sampli treningowych...")
     X_train_samples, Y_train_samples = create_sliding_windows(
         X_train, Y_train, SEQUENCE_LENGTH, STEP
     )
-
-    # X_train = np.vstack(all_X)  # shape: [N_samples, window_size, n_features]
-    # Y_train = np.vstack(all_Y) 
-    # all_X, all_Y = [], []
-    # for race_x, race_y in zip(X_test, Y_test):  
-    #     X_r, Y_r = create_windows(race_x, race_y, window_size=30)
-    #     all_X.append(X_r)
-    #     all_Y.append(Y_r)
-    # X_test = np.vstack(all_X)  # shape: [N_samples, window_size, n_features]
-    # Y_test = np.vstack(all_Y)
 
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device:", device)
     model = LSTMStatePredictor(input_size=input_size, hidden_size=256, output_size=output_size, num_layers=1).to(device)
 
-
-
-    
     
     X_train_tensor = torch.tensor(X_train_samples, dtype=torch.float32)
     Y_train_tensor = torch.tensor(Y_train_samples, dtype=torch.float32)
