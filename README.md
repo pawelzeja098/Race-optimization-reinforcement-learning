@@ -7,7 +7,7 @@ To train RL agents effectively, the system first generates **synthetic race simu
 Modern motorsport strategy relies heavily on data-driven decision making.  
 The goal of this project is to:
 1. **Process telemetry data from the Le Mans Ultimate simulator** (lap times, tire wear, fuel consumption, weather, collision impacts, etc.).
-2. **Train neural network models** to reproduce realistic race dynamics and generate synthetic race sequences.
+2. **Train recurrent neural network model (LSTM)** to reproduce realistic race dynamics and generate synthetic race sequences.
 3. Use these simulations as an **environment for RL algorithms**, enabling agents to learn optimal race strategies without the cost of real-world or in-game testing.
 
 ## ⚙️ Current Features
@@ -15,9 +15,10 @@ The goal of this project is to:
 - Preprocessing and scaling of continuous race data.
 - **Long short-term memory(LSTM) model** for predicting next race states and generating synthetic race runs.
 - Extend the simulator with probabilistic events (e.g., car damage from collisions).
+- Integrated a **Reinforcement Learning env** to allow agent to optimize strategies (pit stops, tire/fuel management).
 
 ## 🚧 Next Steps
-- Integrate a **Reinforcement Learning environment** to allow agents to optimize strategies (pit stops, tire/fuel management).
+- Tune hyperparameters and learn RL agent 
 - Test/fine-tune RL model directly with LMU
 
 ## 🛠️ Technologies

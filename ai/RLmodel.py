@@ -1,5 +1,8 @@
 import os
 import sys
+
+import sqlite3
+import json
 sys.path.append(r'E:\Programowanie\Reinforcement-learning-race-simulation')
 
 import torch 
@@ -14,6 +17,9 @@ import pandas as pd
 from collections import deque
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from envs.racing_env import RacingEnv
+from sklearn.preprocessing import StandardScaler , MinMaxScaler, RobustScaler
+import joblib
+from config import Y_INDEXES
 
 class  ActorCritic(nn.Module):
     def __init__(self, state_dim,action_space):
@@ -203,6 +209,110 @@ def ppo_update(model, optimizer, buffer, device, clip_eps=0.2):
     # Zwróć straty do logowania
     return actor_loss.item(), critic_loss.item()
 
+def load_data_from_db():
+    
+    """
+    Load data so that each race is a separate sequence:
+    X = [ [state1_race1, state2_race1, ...], [state1_race2, ...] ]
+    Y = [ [next1_race1, next2_race1, ...], ... ]
+    """
+    conn = sqlite3.connect(
+        "E:/pracadyp/Race-optimization-reinforcement-learning/data/db_states_for_regress/race_data_states.db"
+    )
+    cursor = conn.cursor()
+    cursor.execute("SELECT race_id, states_json FROM races ORDER BY race_id")
+    rows = cursor.fetchall()
+    conn.close()
+
+
+    data = []
+
+    for race_id, states_json in rows:
+        states = json.loads(states_json)
+        data.append(states)
+    
+    return data
+
+
+def create_x(data):
+    X_grouped = []
+
+    for race in data:
+        X_seq = []
+        for i in range(len(race) - 1):
+            X_seq.append(race[i][:Y_INDEXES])  # current state
+        # dodajemy każdy wyścig osobno
+        X_grouped.append(np.array(X_seq, dtype=float))
+    
+    rl_feature_indices = np.r_[2:9, 11:12, 16:25, 26:33, 34:37]
+    X_filtered = []
+    for race in X_grouped:
+        # race ma kształt (N_steps, 38)
+        # Bierzemy wszystkie wiersze (:), ale tylko wybrane kolumny (indices)
+        race_subset = race[:, rl_feature_indices]
+        X_filtered.append(race_subset)
+        
+    del X_grouped
+        
+    return X_filtered
+
+
+
+def create_scalers(X):
+
+    # cont_indices_x = slice(0, CONT_LENGTH)   # continuous columns for X (0–18)
+    # cont_indices_y = slice(0, Y_SHAPE)   # continuous columns for Y (0–11)
+
+    no_scaler_x = slice(0, 8)  # no scaler for X
+    min_max_scaler_x = slice(8, 20)  # min-max scaler for X
+    robust_scaler_x = slice(20, 28)  # robust scaler for X
+     # robust scaler for Y
+
+   
+    flat_x_min_max = np.vstack([x[:, min_max_scaler_x] for x in X])
+    flat_x_robust = np.vstack([x[:, robust_scaler_x] for x in X])
+
+
+    scaler_X_min_max = MinMaxScaler().fit(flat_x_min_max)
+    scaler_X_robust = RobustScaler().fit(flat_x_robust)
+
+    return scaler_X_min_max, scaler_X_robust
+
+def scale_single_input(raw_vector_x, scaler_X_min_max, scaler_X_robust):
+    """
+    Skaluje pojedynczy wektor (37,), stosując scaler tylko do 
+    części ciągłej (0-19) i zostawiając kategorialną (20-36).
+    """
+    no_scaler_x = slice(0, 8)  # no scaler for X
+    min_max_scaler_x = slice(8, 20)  # min-max scaler for X
+    robust_scaler_x = slice(20, 28)  # robust scaler for X
+ 
+    
+    # raw_vector_x[cont_indices_x] ma kształt (19,)
+    # Musimy go przekształcić na (1, 19) dla scalera
+    x_min_max_scaled = scaler_X_min_max.transform([raw_vector_x[min_max_scaler_x]])
+    x_robust_scaled = scaler_X_robust.transform([raw_vector_x[robust_scaler_x]])
+    
+    # raw_vector_x[cat_indices_x] ma kształt (18,)
+    # --- POPRAWKA TUTAJ ---
+    # Musimy go przekształcić na (1, 19), aby pasował do hstack
+    x_no_scaled = raw_vector_x[no_scaler_x].reshape(1, -1)
+    
+    # Teraz łączymy (1, 19) z (1, 18) -> (1, 37)
+    # i spłaszczamy z powrotem do 1D (37,)
+    return np.hstack([x_no_scaled, x_min_max_scaled, x_robust_scaled]).flatten()
+
+def save_checkpoint(model, optimizer, epoch, filename):
+    checkpoint = {
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        # Możesz dodać inne rzeczy, np. historię nagród
+        # 'all_total_rewards': all_total_rewards 
+    }
+    torch.save(checkpoint, filename)
+    print(f"Checkpoint zapisany: {filename}")
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 env = RacingEnv()
@@ -211,22 +321,39 @@ model = ActorCritic(state_dim, env.action_space).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
 buffer = RolloutBuffer()
 all_total_rewards = []
-num_epochs = 250
+num_epochs = 500
 last_step = 0
-# steps_per_epoch = 200 # Ta zmienna nie jest używana w tej logice
+
+
+try:
+    scaler_minmax_X = joblib.load("models/scalerX_min_max_RL.pkl")
+    scaler_robust_X = joblib.load("models/scalerX_robust_RL.pkl")
+except:
+    data = load_data_from_db()
+    X = create_x(data)
+    scaler_minmax_X, scaler_robust_X = create_scalers(X)
+    joblib.dump(scaler_minmax_X, "models/scalerX_min_max_RL.pkl")
+    joblib.dump(scaler_robust_X, "models/scalerX_robust_RL.pkl")
+
+
 
 for epoch in range(num_epochs):
     
     obs = env.reset()
-    done = False  # <-- POPRAWKA 1: Zainicjuj 'done'
+    done = False  
+
+    obs = scale_single_input(obs, scaler_minmax_X, scaler_robust_X)
     
     while not done:
         
+
         # Wybierz akcję na podstawie bieżącej obserwacji
         actions, log_prob, value = select_action(model, obs)
         
         # Wykonaj akcję. 
         next_obs, reward, done, last_step, _ = env.step(actions, last_step)
+
+        next_obs = scale_single_input(next_obs, scaler_minmax_X, scaler_robust_X)
 
         # --- POPRAWKA 2: Zapisuj 'obs' (stan s_t) ---
         buffer.states.append(obs) 
@@ -266,9 +393,12 @@ for epoch in range(num_epochs):
         
     print(f"Epoch {epoch}, total reward {total_reward}")
     print(buffer.actions)
+    print(buffer.rewards)
     
     # Wyczyść bufor po aktualizacji, gotowy na nową epokę
     buffer.clear()
+
+save_checkpoint(model, optimizer, epoch, "models/RL_agent.pth")
 
 
 print("Trening zakończony. Rysowanie wykresu nagrody...")

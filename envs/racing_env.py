@@ -70,7 +70,7 @@ class RacingEnv(gym.Env):
         self.is_repairing = 0.0
         self.weather_conditions = generate_weather_conditions(self.total_steps)
         self.pit_stage = 0
-        
+        self.last_lap_step = 0
         self.laps = 0
         self.checked_pit = False
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -128,55 +128,54 @@ class RacingEnv(gym.Env):
         #New obs space including only data aviable directly from simulator. 
         self.observation_space = gym.spaces.Box(
     low=np.array([
-        0.0,   # Lap Dist
-        # 0.0,   # Race complete %
         0.0,   # Tank capacity
-        0.0,   # Wheel wear
-        0.0,   # Wheel wear
-        0.0,   # Wheel wear
-        0.0,   # Wheel wear
-        0.0,   # Wheel temperature
-        0.0,   # Wheel temperature
-        0.0,   # Wheel temperature
-        0.0,   # Wheel temperature
         0.0,   # Path wetness
-        0.0,   # Number of penalties
+        0.0,   # Wheel wear
+        0.0,   # Wheel wear
+        0.0,   # Wheel wear
+        0.0,   # Wheel wear
+        0.0,   #step ratio
         0.0,   # Raining
-        0.0,   # Ambient temp
-        0.0,   # Track temp
-        0.0,   # End ET
+
+        
         0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  # dent severities
         0.0,   # Total laps
-        0.0,   # Sector
         0.0,   # Num pitstops
         0.0,   # tire compound index
-        1.0    # multiplier
+        1.0,   # multiplier
+
+        100.0,   # Wheel temperature
+        100.0,   # Wheel temperature
+        100.0,   # Wheel temperature
+        100.0,   # Wheel temperature   
+        3.0,   # Ambient temp
+        8.0,   # Track temp
+        0.0,   # End ET 
 
     ], dtype=np.float32),
     high=np.array([
-        1.2,     # Lap Dist   
-        # 2.0,     # Race complete %
         1.1,     # Tank capacity
-        1.0,     # Wheel wear
-        1.0,     # Wheel wear
-        1.0,     # Wheel wear
-        1.0,     # Wheel wear
-        600.0,   # Wheel temperature
-        600.0,   # Wheel temperature
-        600.0,   # Wheel temperature
-        600.0,   # Wheel temperature
         1.0,    # Path wetness
-        100.0,   # Number of penalties
+        1.0,     # Wheel wear
+        1.0,     # Wheel wear
+        1.0,     # Wheel wear
+        1.0,     # Wheel wear
+        1.0,     #step ratio
         1.0,   # Raining
+        
+        2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0,  # dent severities
+        400.0,   # Total laps
+        100.0,   # Num pitstops
+        3.0,    # tire compound index
+        3.0,   # multiplier
+    
+        600.0,   # Wheel temperature
+        600.0,   # Wheel temperature
+        600.0,   # Wheel temperature
+        600.0,   # Wheel temperature
         45.0,   # Ambient temp
         60.0,   # Track temp
         86500.0,   # End ET
-        2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0,  # dent severities
-        400.0,   # Total laps
-        2.0,   # Sector
-        100.0,   # Num pitstops
-        3.0,    # tire compound index
-        1.0    # multiplier
     ], dtype=np.float32),
     dtype=np.float32
 )
@@ -188,7 +187,7 @@ class RacingEnv(gym.Env):
                                                 # 2, # Confirm pit stop or not
                                                 5, # Tire change (0-4) No, soft, medium, hard, wet
                                                 2, # Repair or not (0-1)
-                                                21, # Fuel * 0.05 (0-20)
+                                                6, # Fuel * 0.2 (0-20)
                                                 ])
         
    
@@ -234,6 +233,7 @@ class RacingEnv(gym.Env):
         self.is_repairing = 0.0
         self.refueled_amount = 0.0
         self.dent_severity = [0.0]*8
+        self.last_lap_step = 0
 
         # weather_conditions = generate_weather_conditions(1)
 
@@ -313,114 +313,111 @@ class RacingEnv(gym.Env):
         # self.curr_window.append(self.state)
 
         obs = np.array([
-                self.lap_dist,
-                self.fuel_tank_capacity,
-                self.wheel1_wear,
-                self.wheel2_wear,
-                self.wheel3_wear,
-                self.wheel4_wear,
-                self.wheel1_temp,
-                self.wheel2_temp,
-                self.wheel3_temp,
-                self.wheel4_temp,
-                self.path_wetness,
-                self.num_penalties,
-                self.raining,
-                self.ambient_temp,
-                self.track_temp,
-                self.end_et,
-                self.dent_severity[0],
-                self.dent_severity[1],
-                self.dent_severity[2],
-                self.dent_severity[3],
-                self.dent_severity[4],
-                self.dent_severity[5],
-                self.dent_severity[6],
-                self.dent_severity[7],
-                self.laps,
-                self.sector,
-                self.num_pit_stops,
-                self.tire_compound_index,
-                self.usage_multiplier
-                
-            ], dtype=np.float32)
+            self.fuel_tank_capacity,
+            self.path_wetness,
+            self.wheel1_wear,
+            self.wheel2_wear,
+            self.wheel3_wear,
+            self.wheel4_wear,
+            self.curr_step/self.total_steps,
+            self.raining,
+            
+            
+            self.dent_severity[0],
+            self.dent_severity[1],
+            self.dent_severity[2],
+            self.dent_severity[3],
+            self.dent_severity[4],
+            self.dent_severity[5],
+            self.dent_severity[6],
+            self.dent_severity[7],
+            self.laps,
+            self.num_pit_stops,
+            self.tire_compound_index,
+            self.usage_multiplier,
+
+            self.wheel1_temp,
+            self.wheel2_temp,
+            self.wheel3_temp,
+            self.wheel4_temp,
+            self.ambient_temp,
+            self.track_temp,
+            self.end_et
+            
+        ], dtype=np.float32)
 
 
         return obs
     
-    def start_configuration(self,action):
-        self.tire_compound_index = action[1] - 1.0
-        self.fuel_tank_capacity = max(action[3] * 0.05, 1.0)
-        self.wheel1_wear = 1.0
-        self.wheel2_wear = 1.0
-        self.wheel3_wear = 1.0
-        self.wheel4_wear = 1.0
-        self.wheel1_temp = 300.0
-        self.wheel2_temp = 300.0
-        self.wheel3_temp = 300.0
-        self.wheel4_temp = 300.0
+    # def start_configuration(self,action):
+    #     self.tire_compound_index = action[1] - 1.0
+    #     self.fuel_tank_capacity = max(action[3] * 0.05, 1.0)
+    #     self.wheel1_wear = 1.0
+    #     self.wheel2_wear = 1.0
+    #     self.wheel3_wear = 1.0
+    #     self.wheel4_wear = 1.0
+    #     self.wheel1_temp = 300.0
+    #     self.wheel2_temp = 300.0
+    #     self.wheel3_temp = 300.0
+    #     self.wheel4_temp = 300.0
 
-
-
-    
-#       mLastImpactET: min=0.0, max=844.02001953125 mam
-# mLastImpactMagnitude: min=0.0, max=22007.326171875 mam
-# mNumPenalties: min=0.0, max=1.0 nie mam, narazie nie biorę pod uwagę
-# mRaining: min=0.0, max=1.0 mam
-# mAmbientTemp: min=5.33, max=40.0 mam
-# mTrackTemp: min=9.0, max=47.35 mam
-# mDentSeverity[0]: min=0.0, max=2.0 mam
-# mDentSeverity[1]: min=0.0, max=2.0 mam
-# mDentSeverity[2]: min=0.0, max=0.0 mam
-# mDentSeverity[3]: min=0.0, max=2.0 mam
-# mDentSeverity[4]: min=0.0, max=2.0 mam
-# mDentSeverity[5]: min=0.0, max=2.0 mam
-# mDentSeverity[6]: min=0.0, max=0.0 mam
-# mDentSeverity[7]: min=0.0, max=2.0 mam
-# has_last_lap: min=0.0, max=1.0 nie mam
-# mFinishStatus: min=0.0, max=1.0 mam
-# mTotalLaps: min=0.0, max=9.0 mam
-# mSector: min=0.0, max=2.0 mam
-# mNumPitstops: min=0.0, max=2.0 nie mam
-# mInPits: min=0.0, max=1.0 mam
-# mFrontTireCompoundIndex: min=0.0, max=3.0 nie mam 
-# multiplier: min=1.0, max=3.0 nie mam
-# Feature 22: min=0.0, max=404.0758056640625
-# Feature 23: min=0.0, max=354.8138427734375
-#Do RL moze bym jeszcze potrzebowal całkowity race time
 
     def compute_reward(self,last_step):
-        reward = 0.0
-        if self.sector == 0.0:
-            lap_time = self.end_et * self.race_complete_perc
-        elif self.sector == 1.0:
-            last_race_state = last_step
-            curr_race_state = self.curr_step/self.total_steps
-            curr_delta = curr_race_state - last_race_state
-            reward = (curr_delta - self.delta) * 100.0
-            self.delta = curr_delta
-            # reward += delta * 100.0
+        # reward = 0.0
+        # if self.sector == 0.0:
+        #     lap_time = self.end_et * self.race_complete_perc
+        # elif self.sector == 1.0:
+        #     last_race_state = last_step
+        #     curr_race_state = self.curr_step/self.total_steps
+        #     curr_delta = curr_race_state - last_race_state
+        #     reward = (curr_delta - self.delta) * 100.0
+        #     self.delta = curr_delta
+        #     # reward += delta * 100.0
             
-            # if self.fuel_tank_capacity <= 0.05:
-            #     reward -= 50.0
-            # if self.wheel1_wear >= 0.2 or self.wheel2_wear >= 0.2 or self.wheel3_wear >= 0.2 or self.wheel4_wear >= 0.2:
-            #     reward -= 20.0
-        elif self.finish_status == 1.0:
-            reward += 100.0
-            reward += 50000 * self.laps / self.total_steps
+        #     # if self.fuel_tank_capacity <= 0.05:
+        #     #     reward -= 50.0
+        #     # if self.wheel1_wear >= 0.2 or self.wheel2_wear >= 0.2 or self.wheel3_wear >= 0.2 or self.wheel4_wear >= 0.2:
+        #     #     reward -= 20.0
+        # elif self.finish_status == 1.0:
+        #     reward += 100.0
+        #     reward += 50000 * self.laps / self.total_steps
+        # return reward
+        reward = 0.0
+        steps_this_lap = self.curr_step - self.last_lap_step
+        reward += 100 + (1000 - steps_this_lap) * 0.1  # 606 is median steps per lap
         return reward
+
              
 
     def step(self,action,last_step):
         """One step of the environment's dynamics.(NOT ONE LAP)"""
         prev_sector = self.sector
-        reward = 0.0
+        
         gap_between_tires = 0
         waiting_for_fuel = False
         repair_time = 0
         repair_weights = [20, 20, 30, 30, 60, 30, 30, 20]
         self.current_angle_radians = 0.0
+        reward = 0.0
         while True:
+            # reward = 0.0
+            if self.fuel_tank_capacity <= 0.05:
+                done = True
+                reward = -500.0
+                if self.num_race < 6:
+                    self.make_plots()
+                self.history = []
+                break
+
+            if self.curr_step >= self.total_steps:
+                done = True
+                reward = 100.0 * self.lap_dist
+                # reward += 50000 * self.laps / self.total_steps
+                if self.num_race < 6:
+                    self.make_plots()
+                self.history = []
+                break
+            
             # if (prev_sector == 2.0 and self.sector == 0.0) or (prev_sector == 1.0 and self.sector == 2.0) or self.finish_status == 1.0:
             if (prev_sector == 0.0 and self.sector == 1.0) or self.finish_status == 1.0:
                 if self.laps == 0:
@@ -429,8 +426,8 @@ class RacingEnv(gym.Env):
                     reward = self.compute_reward(last_step)
             
             if (prev_sector == 2.0 and self.sector == 0.0):
-
-
+                
+                
 
                 break
             
@@ -527,14 +524,7 @@ class RacingEnv(gym.Env):
             #         pass
 
             #Check if max steps reached
-            if self.curr_step >= self.total_steps:
-                done = True
-                reward += 100.0
-                reward += 50000 * self.laps / self.total_steps
-                if self.num_race < 6:
-                    self.make_plots()
-                self.history = []
-                break
+           
 
 
             #Check current sector
@@ -555,13 +545,6 @@ class RacingEnv(gym.Env):
             pit_entry_line_dist = pit_entry_line / lap_dist_max
             pit_exit_line_dist = pit_exit_line / lap_dist_max
 
-            if self.fuel_tank_capacity <= 0.05:
-                done = True
-                reward = -100.0
-                if self.num_race < 6:
-                    self.make_plots()
-                self.history = []
-                break
             
             # Check if in pits and handle pit stop actions
             if action[0] == 1 and self.laps > 1:
@@ -653,7 +636,7 @@ class RacingEnv(gym.Env):
 
                     # --- FAZA 2: PALIWO ---
                     elif self.pit_stage == 2:
-                        target_fuel = action[3] * 0.05
+                        target_fuel = action[3] * 0.2
                         current_fuel = self.fuel_tank_capacity # lub data_lstm[1] zależnie jak przechowujesz
                         self.fuel_needed = target_fuel - current_fuel
 
@@ -831,22 +814,16 @@ class RacingEnv(gym.Env):
             # print(self.state)
 
         obs = np.array([
-            self.lap_dist,
             self.fuel_tank_capacity,
+            self.path_wetness,
             self.wheel1_wear,
             self.wheel2_wear,
             self.wheel3_wear,
             self.wheel4_wear,
-            self.wheel1_temp,
-            self.wheel2_temp,
-            self.wheel3_temp,
-            self.wheel4_temp,
-            self.path_wetness,
-            self.num_penalties,
+            self.curr_step/self.total_steps,
             self.raining,
-            self.ambient_temp,
-            self.track_temp,
-            self.end_et,
+            
+            
             self.dent_severity[0],
             self.dent_severity[1],
             self.dent_severity[2],
@@ -856,10 +833,17 @@ class RacingEnv(gym.Env):
             self.dent_severity[6],
             self.dent_severity[7],
             self.laps,
-            self.sector,
             self.num_pit_stops,
             self.tire_compound_index,
-            self.usage_multiplier
+            self.usage_multiplier,
+
+            self.wheel1_temp,
+            self.wheel2_temp,
+            self.wheel3_temp,
+            self.wheel4_temp,
+            self.ambient_temp,
+            self.track_temp,
+            self.end_et
             
         ], dtype=np.float32)
 
