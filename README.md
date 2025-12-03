@@ -10,6 +10,9 @@ The goal of this project is to:
 2. **Train recurrent neural network model (LSTM)** to reproduce realistic race dynamics and generate synthetic race sequences.
 3. Use these simulations as an **environment for RL algorithms**, enabling agents to learn optimal race strategies without the cost of real-world or in-game testing.
 
+<img width="5752" height="1928" alt="image" src="https://github.com/user-attachments/assets/c1684989-c6ab-47b2-b730-7c10d07b0c25" />
+
+
 ## ⚙️ Current Features
 - Data ingestion from Le Mans Ultimate telemetry logs.
 - Preprocessing and scaling of continuous race data.
