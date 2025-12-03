@@ -68,7 +68,7 @@ class RacingEnv(gym.Env):
         self.delta = 0.0
         self.num_race = 0
         self.is_repairing = 0.0
-        self.weather_conditions = generate_weather_conditions(self.total_steps)
+        # self.weather_conditions = generate_weather_conditions(self.total_steps)
         self.pit_stage = 0
         self.last_lap_step = 0
         self.laps = 0
@@ -83,47 +83,32 @@ class RacingEnv(gym.Env):
         # self.scaler_Y = joblib.load("models/scaler2_Y.pkl")
         self.h_c = None
         self.lap_checked = False
+        self.target_fuel = 0.0
 
         self.LSTM_model = LSTMStatePredictor(input_size=X_SHAPE, hidden_size=256, output_size=Y_SHAPE, num_layers=1).to(device)
         self.LSTM_model.load_state_dict(torch.load("models/lstmdeltaT_model.pth", map_location=device))
         self.LSTM_model.eval()
         # self.curr_window = deque(maxlen=30)
 
-        self.impact_magnitude_history = []
-        self.impact_flag_history = []
-        self.dent_severity_history = []
-        self.dent_severity_change = [0.0]*8
-        for i in range(self.total_steps):
+        # self.impact_magnitude_history = []
+        # self.impact_flag_history = []
+        # self.dent_severity_history = []
+        # self.dent_severity_change = [0.0]*8
+        # for i in range(self.total_steps):
 
-            impact_magnitude = random_impact_magnitude(probabilities=probabilities, bin_edges=bin_edges)
-            if impact_magnitude > 0.0:
-                impact_flag = 1.0
-                self.dent_severity_change = generate_dent_severity(impact_magnitude)
-            else:
-                impact_flag = 0.0
-                self.dent_severity_change = [0.0]*8
+        #     impact_magnitude = random_impact_magnitude(probabilities=probabilities, bin_edges=bin_edges)
+        #     if impact_magnitude > 0.0:
+        #         impact_flag = 1.0
+        #         self.dent_severity_change = generate_dent_severity(impact_magnitude)
+        #     else:
+        #         impact_flag = 0.0
+        #         self.dent_severity_change = [0.0]*8
                     
             
-            self.impact_magnitude_history.append(impact_magnitude)
-            self.impact_flag_history.append(impact_flag)
-            self.dent_severity_history.append(self.dent_severity_change)
+        #     self.impact_magnitude_history.append(impact_magnitude)
+        #     self.impact_flag_history.append(impact_flag)
+        #     self.dent_severity_history.append(self.dent_severity_change)
                
-
-
-        
-
-        # with open(data_race_scoring, "r") as file:
-        #     self.scoring_data = json.load(file)
-        # with open(data_race_telemetry, "r") as file:
-        #     self.telemetry_data = json.load(file)
-        
-        
-
-        #tires - 0 - soft, 1 - medium, 2 - hard , 3 - wet 
-        # self.state = [1, 1, 1, 1, 1, 0, 0.8] #Engine, suspension, brakes,fuel, tires_wear tires_type, car_power
-        # self.state = self._extract_state(self.telemetry_data[0], self.scoring_data[0])
-        
-        
 
         #New obs space including only data aviable directly from simulator. 
         self.observation_space = gym.spaces.Box(
@@ -193,7 +178,35 @@ class RacingEnv(gym.Env):
    
 
 
-    def reset(self):
+    def reset(self,end_et = 1932.0,total_steps=5007,usage_multiplier=1.0,no_rain=False):
+        self.total_steps = total_steps
+        self.weather_conditions = generate_weather_conditions(self.total_steps,no_rain=no_rain)
+        self.impact_magnitude_history = []
+        self.impact_flag_history = []
+        self.dent_severity_history = []
+        self.dent_severity_change = [0.0]*8
+        
+        for i in range(self.total_steps):
+
+            impact_magnitude = random_impact_magnitude(probabilities=probabilities, bin_edges=bin_edges)
+            if impact_magnitude > 0.0:
+                impact_flag = 1.0
+                self.dent_severity_change = generate_dent_severity(impact_magnitude)
+            else:
+                impact_flag = 0.0
+                self.dent_severity_change = [0.0]*8
+                    
+            
+            self.impact_magnitude_history.append(impact_magnitude)
+            self.impact_flag_history.append(impact_flag)
+            self.dent_severity_history.append(self.dent_severity_change)
+        
+        self.end_et = end_et
+        self.target_fuel = 0.0
+        # self.total_steps = total_steps
+        self.usage_multiplier = usage_multiplier
+
+
         self.laps = 0
         
         self.lap_dist = 0.0005
@@ -207,10 +220,11 @@ class RacingEnv(gym.Env):
         self.wheel2_delta = 0.0
         self.wheel3_delta = 0.0
         self.wheel4_delta = 0.0
-        self.wheel1_temp = 320.0
-        self.wheel2_temp = 320.0
-        self.wheel3_temp = 320.0
-        self.wheel4_temp = 320.0
+        self.wheel1_temp = 310.0
+        self.wheel2_temp = 310.0
+        self.wheel3_temp = 312.0
+        self.wheel4_temp = 312.0
+        self.currently_in_pit = False
         
         self.last_impact_et = 0.0
         self.last_impact_magnitude = 0.0
@@ -218,7 +232,7 @@ class RacingEnv(gym.Env):
         self.raining = 0.0
         self.ambient_temp = 0.0
         self.track_temp = 0.0
-        self.end_et = 0.0
+        # self.end_et = 0.0
         # self.dent_severity = [0.0]*8
         # self.has_last_lap = 0.0
         self.finish_status = 0.0
@@ -249,7 +263,7 @@ class RacingEnv(gym.Env):
             self.dent_severity[i] += self.dent_severity_change[i]
             self.dent_severity[i] = min(self.dent_severity[i], 2.0)
 
-        self.end_et = 1932.0
+        
         # self.race_complete_perc = 126.0 / self.end_et #Approxed delta for driving to start line(126s)
         
         self.curr_step = 0
@@ -374,8 +388,8 @@ class RacingEnv(gym.Env):
             if self.fuel_tank_capacity <= 0.05:
                 done = True
                 reward = -500.0
-                if self.num_race < 6:
-                    self.make_plots()
+                
+                self.make_plots()
                 self.history = []
                 break
 
@@ -383,8 +397,8 @@ class RacingEnv(gym.Env):
                 done = True
                 reward = 100.0 * self.lap_dist
                 # reward += 50000 * self.laps / self.total_steps
-                if self.num_race < 6:
-                    self.make_plots()
+                
+                self.make_plots()
                 self.history = []
                 break
             
@@ -471,6 +485,10 @@ class RacingEnv(gym.Env):
             
             lap_dist_max = 13623.9677734375
             pit_entry_line_dist = pit_entry_line / lap_dist_max
+            pit_exit_line_dist = (pit_exit_line / lap_dist_max) - 0.0005
+
+            
+            # Check if in pits and handle pit stop actions
             pit_exit_line_dist = pit_exit_line / lap_dist_max
 
             
@@ -564,9 +582,9 @@ class RacingEnv(gym.Env):
 
                     # --- FAZA 2: PALIWO ---
                     elif self.pit_stage == 2:
-                        target_fuel = action[3] * 0.2
+                        self.target_fuel = action[3] * 0.2
                         current_fuel = self.fuel_tank_capacity # lub data_lstm[1] zależnie jak przechowujesz
-                        self.fuel_needed = target_fuel - current_fuel
+                        self.fuel_needed = self.target_fuel - current_fuel
 
                         if self.fuel_needed > 0:
                             # Obliczamy czas tankowania (np. 1 litr = 1 step)
@@ -580,7 +598,7 @@ class RacingEnv(gym.Env):
                     elif self.pit_stage == 2.5: # Wykonywanie tankowania
                         if self.fuel_needed > 0:
                             current_fuel = self.fuel_tank_capacity
-                            self.fuel_needed = target_fuel - current_fuel
+                            self.fuel_needed = self.target_fuel - current_fuel
                             # self.pit_timer -= 1
                             self.refueled_amount = max(max(1.6001, self.fuel_needed), 0) / tank_capacity_max
                             self.fuel_tank_capacity += self.refueled_amount
@@ -636,9 +654,13 @@ class RacingEnv(gym.Env):
             self.dent_severity_change = self.dent_severity_history[self.curr_step]
 
             for i in range(8):
+                if self.in_pits == 1.0:
+                    self.dent_severity_change[i] = 0.0
                 
                 self.dent_severity[i] += self.dent_severity_change[i]
                 self.dent_severity[i] = min(self.dent_severity[i], 2.0)
+                #IN SAMPLES DENT SEVERITY[0] MAX IS 1.0
+                self.dent_severity[0] = min(self.dent_severity[i], 1.0)
 
             
             # weather_conditions = generate_weather_conditions(1,self.raining,self.ambient_temp,self.track_temp)

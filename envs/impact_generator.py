@@ -30,6 +30,7 @@ def generate_dent_severity(impact_magnitude):
     values = [0, 1, 2, 3] #front,right,left,rear
     probabilities = [0.35, 0.15, 0.15, 0.35]
     dent_severity_change = [0.0]*8
+    each_elem_damage_prob = [0.05,0.68,0.21,0.0,0.09,0.25,0.11,0.0]
 
     random_value = np.random.choice(values, p=probabilities)
 
@@ -43,32 +44,36 @@ def generate_dent_severity(impact_magnitude):
     if random_value == 3:
         elements_to_damage = [3,4,5]
     
-    if impact_magnitude < 2000:
+    if impact_magnitude < 1000:
         elem_damage_prob = 0.05
         damage_levels = [1.0]
         damage_probs = [1.0]
+    elif impact_magnitude < 2000:
+        elem_damage_prob = 0.1
+        damage_levels = [1.0]
+        damage_probs = [1.0]
     elif impact_magnitude < 4000:
-        elem_damage_prob = 0.08
+        elem_damage_prob = 0.12
         damage_levels = [1.0]
         damage_probs = [1.0]
     elif impact_magnitude < 6000:
-        elem_damage_prob = 0.1
+        elem_damage_prob = 0.18
         damage_levels = [1.0, 2.0]
         damage_probs = [0.7, 0.3]
     elif impact_magnitude < 8000:
-        elem_damage_prob = 0.2
+        elem_damage_prob = 0.4
         damage_levels = [1.0, 2.0]
         damage_probs = [0.6, 0.4]
     elif impact_magnitude < 12000:
-        elem_damage_prob = 0.4
+        elem_damage_prob = 0.7
         damage_levels = [1.0, 2.0]
         damage_probs = [0.5, 0.5]
     elif impact_magnitude < 15000:
-        elem_damage_prob = 0.6
+        elem_damage_prob = 0.8
         damage_levels = [1.0, 2.0]
         damage_probs = [0.4, 0.6]
     elif impact_magnitude < 20000:
-        elem_damage_prob = 0.9
+        elem_damage_prob = 0.95
         damage_levels = [1.0, 2.0]
         damage_probs = [0.3, 0.7]
     else:
@@ -79,10 +84,14 @@ def generate_dent_severity(impact_magnitude):
     for i in elements_to_damage:
         if i == 2 or i == 6:
             continue  # te elementy się nie uszkadzają
-        if np.random.rand() > elem_damage_prob:  # szansa na uszkodzenie tego elementu
+        
+        final_elem_damage_prob = each_elem_damage_prob[i] * elem_damage_prob * 10
+
+        if np.random.rand() > final_elem_damage_prob:  # szansa na uszkodzenie tego elementu
             continue
         else:
             dent_severity_change[i] = np.random.choice(damage_levels, p=damage_probs)
+            
             # if dent_severity_current[i] < 2.0:
             #     dent_severity_current[i] += np.random.choice(damage_levels, p=damage_probs)
             #     dent_severity_current[i] = min(dent_severity_current[i], 2.0)  # max 2.0

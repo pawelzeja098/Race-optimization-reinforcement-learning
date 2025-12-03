@@ -305,11 +305,12 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 env = RacingEnv()
 state_dim = env.observation_space.shape[0]
 model = ActorCritic(state_dim, env.action_space).to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 buffer = RolloutBuffer()
 all_total_rewards = []
 num_epochs = 500
 
+RACES_PER_EPOCH = 10
 
 
 try:
@@ -325,65 +326,85 @@ except:
 
 
 for epoch in range(num_epochs):
-    
-    obs = env.reset()
-    done = False  
 
-    obs = scale_single_input(obs, scaler_minmax_X, scaler_robust_X)
+    epoch_total_reward = 0
     
-    while not done:
+    for race_epoch in range(RACES_PER_EPOCH):
+
+        end_et = [734.0,1032.0,1932.0] # 11592.0
+        total_steps = [1653,2692,5007] # 30922
+        usage_multiplier = [1.0,3.0]
+        no_rain = [True,False]
+
+        i_time = random.choice([0,1,2])
+        i_usage = random.choice([0,1])
+        i_rain = random.choice([0,1])
+        end_et = end_et[i_time]
+        total_steps = total_steps[i_time]
+        usage_mult = usage_multiplier[i_usage]
+        no_rain = no_rain[i_rain]
+
+        obs = env.reset(end_et = end_et,total_steps=total_steps,usage_multiplier=usage_mult,no_rain=no_rain)
+        done = False  
+
+        obs = scale_single_input(obs, scaler_minmax_X, scaler_robust_X)
+
+        race_reward = 0
         
+        while not done:
+            
 
-        # Wybierz akcję na podstawie bieżącej obserwacji
-        actions, log_prob, value = select_action(model, obs)
+            # Wybierz akcję na podstawie bieżącej obserwacji
+            actions, log_prob, value = select_action(model, obs)
+            
+            # Wykonaj akcję. 
+            next_obs, reward, done, _ = env.step(actions)
+
+            next_obs = scale_single_input(next_obs, scaler_minmax_X, scaler_robust_X)
+
+            # --- POPRAWKA 2: Zapisuj 'obs' (stan s_t) ---
+            buffer.states.append(obs) 
+            # ---------------------------------------------
+
+            if isinstance(actions, list):
+                # Połącz listę tensorów akcji w jeden tensor [0, 1]
+                actions_tensor = torch.tensor(actions) 
+                # Zsumuj log-prawdopodobieństwa dla wspólnej akcji
+                log_prob_tensor = sum(log_prob)
+            else:
+                # Jeśli to nie lista, po prostu użyj wartości
+                actions_tensor = actions
+                log_prob_tensor = log_prob
+
+            buffer.actions.append(actions_tensor)
+            buffer.log_probs.append(log_prob_tensor)
+            buffer.values.append(value)
+            buffer.rewards.append(torch.tensor(reward, dtype=torch.float32))
+            buffer.dones.append(done)
+
+            # Zaktualizuj stan na następną iterację
+            obs = next_obs
+            race_reward += reward
+            
+            # --- POPRAWKA 3: Usunięto blok 'if done: reset()' ---
+            # Pętla 'while' sama się zakończy, a reset nastąpi
+            # na początku następnej epoki.
+        epoch_total_reward += race_reward
+        # Koniec epizodu (rolloutu)
         
-        # Wykonaj akcję. 
-        next_obs, reward, done, _ = env.step(actions)
-
-        next_obs = scale_single_input(next_obs, scaler_minmax_X, scaler_robust_X)
-
-        # --- POPRAWKA 2: Zapisuj 'obs' (stan s_t) ---
-        buffer.states.append(obs) 
-        # ---------------------------------------------
-
-        if isinstance(actions, list):
-            # Połącz listę tensorów akcji w jeden tensor [0, 1]
-            actions_tensor = torch.tensor(actions) 
-            # Zsumuj log-prawdopodobieństwa dla wspólnej akcji
-            log_prob_tensor = sum(log_prob)
-        else:
-            # Jeśli to nie lista, po prostu użyj wartości
-            actions_tensor = actions
-            log_prob_tensor = log_prob
-
-        buffer.actions.append(actions_tensor)
-        buffer.log_probs.append(log_prob_tensor)
-        buffer.values.append(value)
-        buffer.rewards.append(torch.tensor(reward, dtype=torch.float32))
-        buffer.dones.append(done)
-
-        # Zaktualizuj stan na następną iterację
-        obs = next_obs
+        # PPO update po zebraniu danych z całego epizodu
+        ppo_update(model, optimizer, buffer, device)
+        total_reward = sum([r.item() for r in buffer.rewards])
+        all_total_rewards.append(total_reward)
         
-        # --- POPRAWKA 3: Usunięto blok 'if done: reset()' ---
-        # Pętla 'while' sama się zakończy, a reset nastąpi
-        # na początku następnej epoki.
-
-    # Koniec epizodu (rolloutu)
-    
-    # PPO update po zebraniu danych z całego epizodu
-    ppo_update(model, optimizer, buffer, device)
-    total_reward = sum([r.item() for r in buffer.rewards])
-    all_total_rewards.append(total_reward)
-    
-    # if epoch % 10 == 0:
+        # if epoch % 10 == 0:
+            
+        print(f"Epoch {epoch}, total reward {total_reward}")
+        print(buffer.actions)
+        print(buffer.rewards)
         
-    print(f"Epoch {epoch}, total reward {total_reward}")
-    print(buffer.actions)
-    print(buffer.rewards)
-    
-    # Wyczyść bufor po aktualizacji, gotowy na nową epokę
-    buffer.clear()
+        # Wyczyść bufor po aktualizacji, gotowy na nową epokę
+        buffer.clear()
 
 save_checkpoint(model, optimizer, epoch, "models/RL_agent.pth")
 
@@ -391,12 +412,12 @@ save_checkpoint(model, optimizer, epoch, "models/RL_agent.pth")
 print("Trening zakończony. Rysowanie wykresu nagrody...")
 
 plt.figure(figsize=(12, 6))
-plt.plot(all_total_rewards, label='Całkowita nagroda (Surowa)')
+plt.plot(all_total_rewards, label='Całkowita nagroda')
 
 # --- (Opcjonalnie, ale BARDZO ZALECANE) Wygładzony wykres ---
 # Nagrody w RL bardzo "skaczą". Średnia krocząca pokazuje prawdziwy trend.
 rolling_avg = pd.Series(all_total_rewards).rolling(window=50).mean() # Średnia z 50 epok
-plt.plot(rolling_avg, label='Średnia krocząca (wygładzona)', color='red', linewidth=2)
+plt.plot(rolling_avg, label='Średnia krocząca', color='red', linewidth=2)
 # -----------------------------------------------------------
 
 plt.title('Postęp Uczenia Modelu RL (Nagroda na Epokę)')
@@ -404,6 +425,6 @@ plt.xlabel('Epoka')
 plt.ylabel('Całkowita Nagroda')
 plt.legend()
 plt.grid(True)
-plt.show()
+plt.savefig(f'ai/rl_training_race_historyplots/rl_reward.png', dpi=150)
 
 

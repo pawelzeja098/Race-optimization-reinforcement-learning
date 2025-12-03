@@ -4,7 +4,7 @@
 
 from random import uniform, random, choice, randint
 
-def generate_weather_conditions(num_conditions,mRaining_start=0.0,mAmbientTemp_start=None,mTrackTemp_start=None):
+def generate_weather_conditions(num_conditions,mRaining_start=0.0,mAmbientTemp_start=None,mTrackTemp_start=None,no_rain=False):
     weather_conditions = []
     mRaining = mRaining_start
     mAmbientTemp = mAmbientTemp_start if mAmbientTemp_start is not None else uniform(5, 40)
@@ -39,22 +39,27 @@ def generate_weather_conditions(num_conditions,mRaining_start=0.0,mAmbientTemp_s
         # --- PĘTLA GŁÓWNA (np. update frame) ---
 
         # 1. LOGIKA ZMIANY POGODY (Twoja logika z małymi poprawkami)
-        if mRaining < 0.01:
-            # Start deszczu
-            if random() < 0.001: 
-                mRaining = uniform(0.1, 1.0)
+        if no_rain:
+            mRaining = 0.0
+            raining_change = 0.0
         else:
-            # Zmiana intensywności w trakcie deszczu
-            if raining_time > 100 and random() < 0.01:
-                raining_change = choice([-0.1, -0.2, -0.05, 0.05, 0.1, 0.2])
-                mRaining = min(1.0, max(0.0, mRaining + raining_change))
 
-            raining_time += 1
-            
-            # Koniec deszczu
-            if random() < 0.005 and raining_time > 300: 
-                raining_time = 0
-                mRaining = 0.0
+            if mRaining < 0.01:
+                # Start deszczu
+                if random() < 0.001: 
+                    mRaining = uniform(0.1, 1.0)
+            else:
+                # Zmiana intensywności w trakcie deszczu
+                if raining_time > 100 and random() < 0.01:
+                    raining_change = choice([-0.1, -0.2, -0.05, 0.05, 0.1, 0.2])
+                    mRaining = min(1.0, max(0.0, mRaining + raining_change))
+
+                raining_time += 1
+                
+                # Koniec deszczu
+                if random() < 0.005 and raining_time > 300: 
+                    raining_time = 0
+                    mRaining = 0.0
 
         # 2. WYKRYCIE ZMIANY (Trigger)
         # Sprawdzamy, czy cel się zmienił (czy zmieniło się mRaining)
