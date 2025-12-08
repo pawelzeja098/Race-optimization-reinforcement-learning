@@ -9,20 +9,78 @@ import numpy as np
 import time
 import os
 from pathlib import Path
-
+import socket
+import threading
+import json
+from queue import Queue, Empty
+import time
+from telemetry.sim_to_rl import run_rl_agent
+from telemetry.LMU_plugin import TelemetryClient
+import joblib
+from ai.RLmodel import ActorCritic
+from gymnasium import spaces
 
 if __name__ == "__main__":
+    #--------- COLLECT TELEMETRY DATA ---------
     # usage_multiplier = 3.0  # Ustawienia wyścigu
     # collect_telemetry(usage_multiplier)
+
+    #---------- USE RL AGENT TO MAKE DECISIONS ----------
+    action_space = spaces.MultiDiscrete([
+                                        2, # Pit stop or not
+                                        5, # Tire change (0-4) No, soft, medium, hard, wet
+                                        2, # Repair or not (0-1)
+                                        6, # Fuel * 0.2 (0-20)
+                                        ])
+    state_dim = 26
+   
+    model = ActorCritic(state_dim, action_space) 
+
+    
+    path = "models/RL_agent.pth"
+    checkpoint = torch.load(path, map_location=torch.device('GPU' if torch.cuda.is_available() else 'cpu'))
+
+    try:
+        model.load_state_dict(checkpoint['model_state_dict'])
+        print(f"Pomyślnie wczytano wagi z epoki: {checkpoint.get('epoch', '?')}")
+    except RuntimeError as e:
+        print(f"Błąd kształtu wag! Czy zmieniłeś architekturę modelu? {e}")
+
+ 
+    model.eval()
+
+    scaler_minmax_X = joblib.load("models/scalerX_min_max_RL.pkl")
+    scaler_robust_X = joblib.load("models/scalerX_robust_RL.pkl")
+
+    client = TelemetryClient()
+    client.start()  # To uruchamia wątek odbierania (Wątek 1)
+
+    # To uruchamia wątek przetwarzania RL (Wątek 2)
+    rl_thread = threading.Thread(target=run_rl_agent, args=(client, "DummyModel", scaler_minmax_X, scaler_robust_X), daemon=True)
+    rl_thread.start()
+
+    print("System działa. Główny wątek jest wolny.")
+
+    # --- Wątek Główny (Main) ---
+    # Tutaj możesz robić co chcesz: obsługiwać GUI, czekać na klawisz wyjścia itp.
+    try:
+        while True:
+            time.sleep(1) # Tylko po to, żeby główny wątek nie zużywał 100% CPU
+    except KeyboardInterrupt:
+        print("Zamykanie...")
+        client.stop()
+        # Wątki daemon same zginą po zamknięciu głównego
     
 
-    data_dir = Path(r"E:/pracadyp/Race-optimization-reinforcement-learning/data/raw_races")
+    #--------- FILTER JSON FILES FROM RAW RACES ---------
 
-    for telem_path in data_dir.glob("telemetry_data*.json"):
-        # Tworzymy odpowiadającą nazwę scoring
-        scoring_path = data_dir / telem_path.name.replace("telemetry", "scoring")
-        if scoring_path.exists():
-            save_to_db(str(telem_path), str(scoring_path))
+    # data_dir = Path(r"E:/pracadyp/Race-optimization-reinforcement-learning/data/raw_races")
+
+    # for telem_path in data_dir.glob("telemetry_data*.json"):
+    #     # Tworzymy odpowiadającą nazwę scoring
+    #     scoring_path = data_dir / telem_path.name.replace("telemetry", "scoring")
+    #     if scoring_path.exists():
+    #         save_to_db(str(telem_path), str(scoring_path))
 
 
  
@@ -54,4 +112,4 @@ if __name__ == "__main__":
     # with open(telemetry, "w", encoding="utf-8") as f:
     #     json.dump(data, f, indent=2, ensure_ascii=False)
 
-    # print("✅ Plik został zaktualizowany (multiplier = 2.0)")
+    # print(" Plik został zaktualizowany (multiplier = 2.0)")

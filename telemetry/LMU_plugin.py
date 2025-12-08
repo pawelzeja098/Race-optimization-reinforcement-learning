@@ -148,6 +148,82 @@ def collect_telemetry(usage_multiplier=1.0):
         print(f"Zapisano dane do {scoring_file} i {telem_file}")
 
 
+def receive_telemetry(usage_multiplier=1.0):
+    print("Starting telemetry collection...")
+    client = TelemetryClient()
+    client.start()
+
+
+    try:
+        scoring_saved = False
+        i = 0
+        scoring_counter = 0
+        
+        curr_sector = -1
+        while True:
+            data = client.get_latest()
+
+            
+            if data and data.get("Type") == "ScoringInfoV01":
+                scoring_counter += 1
+                if scoring_counter % 2 != 0:
+                    continue  # zapisujemy co drugą paczkę ScoringInfoV01
+
+                
+                vehicles = data.get("mVehicles", [])
+
+                # znajdź gracza
+                player_vehicle = None
+                for v in vehicles:
+                    if v.get("mIsPlayer") == True:  # albo warunek po nazwie kierowcy
+                        player_vehicle = v
+                        break
+
+                if player_vehicle:
+                    # robimy kopię oryginalnego data
+                    filtered_data = dict(data)
+                    filtered_data["mVehicles"] = [player_vehicle]
+
+                    while True:
+                        try:
+                            _ = client.queue.get_nowait()
+                        except Empty:
+                            break  # pusta kolejka → koniec czyszczenia
+
+                    # szukamy najbliższego TelemInfoV01
+                    telem = None
+                    for _ in range(10):  # max 10 prób
+                        msg = client.get_latest(timeout=0.1)
+                        if msg and msg.get("Type") == "TelemInfoV01":
+                            telem = msg
+                            break
+                        time.sleep(0.05)
+
+                    if telem:
+                        # scoring_records.append(filtered_data)
+                        # telem_records.append(telem)
+                        # i += 1
+
+                        print (f"Pair {i} zapisane (Lap: {player_vehicle['mTotalLaps']}, Sector: {player_vehicle['mSector']})")
+
+                        # dodajemy dopiero tutaj, w parze
+                        telem["multiplier"] = usage_multiplier
+                        scoring_records.append(filtered_data)
+                        telem_records.append(telem)
+
+                        i += 1
+
+              
+    except KeyboardInterrupt:
+        print("\nZatrzymano klienta.")
+    finally:
+        with open(telem_file, "w") as f:
+            json.dump(telem_records, f, indent=2)
+        with open(scoring_file, "w") as f:
+            json.dump(scoring_records, f, indent=2)
+        client.stop()
+        print(f"Zapisano dane do {scoring_file} i {telem_file}")
+
 
 
   # zapis TelemInfoV01
