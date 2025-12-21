@@ -21,74 +21,79 @@ from sklearn.preprocessing import StandardScaler , MinMaxScaler, RobustScaler
 import joblib
 from config import Y_INDEXES
 
-class  ActorCritic(nn.Module):
-    def __init__(self, state_dim,action_space):
-        super(ActorCritic,self).__init__()
-        self.action_space = action_space
-
-        self.fc1 = nn.Linear(state_dim, 128)
-        self.fc2 = nn.Linear(128, 128)
-
+class ActorCritic(nn.Module):
+    def __init__(self, state_dim, action_space):
+        super(ActorCritic, self).__init__()
         
-
+        # ✅ DODAJ LayerNorm dla stabilności
+        self.layer_norm = nn.LayerNorm(state_dim)
         
-        #Actor Every action dim has its own output layer
-        self.output_layers = nn.ModuleList()
-        for n in self.action_space.nvec:
-            self.output_layers.append(nn.Linear(128, n))
-
-        #Critic
+        # Shared layers
+        self.fc1 = nn.Linear(state_dim, 256)
+        self.fc2 = nn.Linear(256, 128)
+        
+        # ✅ DODAJ BatchNorm
+        self.ln1 = nn.LayerNorm(256)  # ← Działa dla batch_size=1!
+        self.ln2 = nn.LayerNorm(128)
+        
+        # Actor heads
+        num_actions = action_space.nvec
+        self.actor_heads = nn.ModuleList([
+            nn.Linear(128, num_actions[i]) for i in range(len(num_actions))
+        ])
+        
+        # Critic head
         self.critic = nn.Linear(128, 1)
-
         
-
-    def forward(self,x):
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-
-        logits = [layer(x) for layer in self.output_layers] # list of logits for each action dim
+        # ✅ WAŻNE: Inicjalizacja wag (zapobiega NaN)
+        self.apply(self._init_weights)
+    
+    def _init_weights(self, module):
+        """Xavier/Glorot initialization dla stabilności"""
+        if isinstance(module, nn.Linear):
+            nn.init.orthogonal_(module.weight, gain=np.sqrt(2))
+            if module.bias is not None:
+                nn.init.constant_(module.bias, 0)
+    
+    def forward(self, x):
+        # ✅ Normalizacja inputu
+        x = self.layer_norm(x)
         
-        #rozłożenie na action dim
-        # logits_split = torch.split(self.fc2(x), self.action_space, dim=1)
-        # dla każdego wymiaru wylicz prawdopodobieństwa
-        action_probs = [F.softmax(logit, dim=1) for logit in logits]
-        state_value = self.critic(x)
-        return action_probs, state_value
+        # Shared layers z ReLU
+        x = F.relu(self.ln1(self.fc1(x)))
+        x = F.relu(self.ln2(self.fc2(x)))
+        
+        # Actor outputs (logits, NIE probabilities!)
+        action_logits = [head(x) for head in self.actor_heads]
+        
+        # Critic output
+        value = self.critic(x)
+        
+        return action_logits, value
 
 
 
 def select_action(model, state):
     """
-    Poprawnie wybiera akcję, używając obiektu Categorical,
-    aby zapewnić spójność z pętlą 'ppo_update'.
+    ✅ POPRAWIONA WERSJA - używa logits zamiast probs
     """
-    
-    # Przenieś stan na 'device'
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(device)
 
-    # Użyj torch.no_grad() do inferencji (szybciej, oszczędza pamięć)
     with torch.no_grad():
-        # Model zwraca LISTĘ LOGITÓW i wartość stanu
         logits_list, state_value = model(state_tensor)
 
     actions = []
     log_probs = []
 
     for logits in logits_list:
-        # 1. Stwórz obiekt dystrybucji z logitów
-        #    (squeeze(0) usuwa wymiar batcha)
+        # ✅ WAŻNE: Używaj logits, NIE probs!
         dist = Categorical(logits=logits.squeeze(0))
+        action = dist.sample()
         
-        # 2. WYLOSUJ akcję (to jest klucz do EKSPLORACJI)
-        action = dist.sample() # Zwraca tensor, np. tensor(1)
-        
-        # 3. Zapisz akcję jako zwykłą liczbę (dla env.step)
-        actions.append(action.item()) # Np. 1
-        
-        # 4. Zapisz log_prob dla tej wylosowanej akcji
-        log_probs.append(dist.log_prob(action)) # Zwraca tensor, np. tensor(-0.45)
+        actions.append(action.item())
+        log_probs.append(dist.log_prob(action))
 
-    # Zwraca: listę liczb, listę tensorów, tensor
     return actions, log_probs, state_value
 
 def compute_gae(rewards, values, dones, gamma=0.995, lam=0.95):
@@ -129,72 +134,113 @@ class RolloutBuffer:
         self.rewards = []
         self.values = []
         self.dones = []
+        self.advantages = []  
+        self.returns = []     
 
     def clear(self):
         self.__init__()
 
-def ppo_update(model, optimizer, buffer, device, clip_eps=0.2):
+
+
+def ppo_update_batch(model, optimizer, buffer, batch_indices, device, clip_eps=0.2, entropy_coef=0.01):
     """
-    Poprawiona funkcja PPO update.
+    ✅ CAŁKOWICIE PRZEPISANA FUNKCJA - naprawione wszystkie problemy
     """
+    # ✅ 1. Sprawdź, czy batch nie jest pusty
+    if len(batch_indices) == 0:
+        return 0.0, 0.0, 0.0
     
-    # --- 1. Konwersja danych z bufora na tensory GPU ---
+    # ✅ 2. Pobierz dane (z konwersją do numpy dla bezpieczeństwa)
+    states = torch.tensor(
+        np.array([buffer.states[i] for i in batch_indices]), 
+        dtype=torch.float32
+    ).to(device)
     
-    states = torch.tensor(np.array(buffer.states), dtype=torch.float32).to(device)
+    actions = torch.stack([buffer.actions[i] for i in batch_indices]).to(device)
+    old_log_probs = torch.stack([buffer.log_probs[i] for i in batch_indices]).to(device)
     
-    # POPRAWKA BŁĘDU 2: Przekonwertuj listę tensorów akcji [tensor([0,1]), ...]
-    # na jeden duży tensor (N_kroków, N_akcji) na GPU
-    actions = torch.stack(buffer.actions).to(device) 
+    # ✅ 3. POPRAWKA: advantages i returns muszą mieć TEN SAM rozmiar co batch
+    advantages = torch.tensor(
+        [buffer.advantages[i] for i in batch_indices], 
+        dtype=torch.float32
+    ).to(device)
     
-    old_log_probs = torch.stack(buffer.log_probs).to(device)
-    # values = torch.stack(buffer.values).squeeze().to(device)
-    values = torch.stack(buffer.values).reshape(-1).to(device)
+    returns = torch.tensor(
+        [buffer.returns[i] for i in batch_indices], 
+        dtype=torch.float32
+    ).to(device)
     
+    # ✅ 4. POPRAWKA: Normalizacja advantages z zabezpieczeniem
+    if len(advantages) > 1:  # Potrzebujemy przynajmniej 2 sampli dla std
+        adv_mean = advantages.mean()
+        adv_std = advantages.std()
+        
+        # ✅ Jeśli std jest bardzo małe lub 0, nie normalizuj
+        if adv_std > 1e-6:
+            advantages = (advantages - adv_mean) / (adv_std + 1e-8)
+        else:
+            advantages = advantages - adv_mean  # Tylko centrowanie
     
-    # POPRAWKA BŁĘDU 3: Przekonwertuj listę tensorów nagród na listę float
-    rewards_list = [r.item() for r in buffer.rewards]
-    dones_list = buffer.dones
-
-    # --- 2. Obliczenia na CPU (GAE) ---
-    advantages, returns = compute_gae(rewards_list, values.tolist(), dones_list)
-    advantages = torch.tensor(advantages, dtype=torch.float32).to(device)
-    returns = torch.tensor(returns, dtype=torch.float32).to(device)
-
-    # --- 3. Forward pass i obliczenie strat ---
+    # ✅ 5. Forward pass
+    logits_list, values_new = model(states)
     
-    # action_probs to lista [tensor_dist_pit, tensor_dist_opony]
-    action_probs, values_new = model(states) 
-
-    # Oblicz log_probs dla MultiDiscrete
+    # ✅ 6. POPRAWKA: Upewnij się, że values_new ma odpowiedni kształt
+    values_new = values_new.squeeze(-1)  # [batch_size, 1] → [batch_size]
+    
+    # ✅ 7. Oblicz log_probs i entropy (używając LOGITS)
     log_probs_new = []
-    for i, probs in enumerate(action_probs):
-        dist = torch.distributions.Categorical(probs)
+    entropy_list = []
+    
+    for i, logits in enumerate(logits_list):
+        # ✅ UŻYWAJ logits, NIE probs!
+        dist = Categorical(logits=logits)
         
-        # POPRAWKA BŁĘDU 1: Użyj "krojonego" tensora 'actions' z GPU
-        # 'actions' ma kształt (N_kroków, N_akcji)
-        # 'acts' będzie miało kształt (N_kroków,)
-        acts = actions[:, i] 
+        acts = actions[:, i]
         
-        # dist (GPU) i acts (GPU) są teraz na tym samym urządzeniu
         log_probs_new.append(dist.log_prob(acts))
-        
+        entropy_list.append(dist.entropy())
+    
     log_probs_new = torch.stack(log_probs_new).sum(dim=0)
-
-    # PPO ratio
+    entropy = torch.stack(entropy_list).sum(dim=0).mean()
+    
+    # ✅ 8. PPO ratio z clip
     ratio = torch.exp(log_probs_new - old_log_probs.detach())
+    
+    # TYKO DLA BEZPIECZEŃSTWA: ogranicz ratio do rozsądnych wartości
+    ratio = torch.clamp(ratio, 0.0, 10.0)
+    
     surr1 = ratio * advantages
-    surr2 = torch.clamp(ratio, 1-clip_eps, 1+clip_eps) * advantages
-
+    surr2 = torch.clamp(ratio, 1 - clip_eps, 1 + clip_eps) * advantages
+    
     actor_loss = -torch.min(surr1, surr2).mean()
-    critic_loss = F.mse_loss(values_new.squeeze(), returns)
-    loss = actor_loss + 0.5 * critic_loss
-
+    
+    # ✅ 9. POPRAWKA: Critic loss z poprawnymi wymiarami
+    critic_loss = F.mse_loss(values_new, returns)
+    
+    # ✅ 10. Total loss z clippingiem
+    loss = actor_loss + 0.5 * critic_loss - entropy_coef * entropy
+    
+    # ✅ 11. WAŻNE: Sprawdź, czy loss nie jest NaN
+    if torch.isnan(loss):
+        print("⚠️ NaN detected in loss! Skipping update.")
+        print(f"  Actor Loss: {actor_loss.item()}")
+        print(f"  Critic Loss: {critic_loss.item()}")
+        print(f"  Entropy: {entropy.item()}")
+        print(f"  Advantages: min={advantages.min().item():.4f}, max={advantages.max().item():.4f}")
+        print(f"  Returns: min={returns.min().item():.4f}, max={returns.max().item():.4f}")
+        return 0.0, 0.0, 0.0
+    
+    # ✅ 12. Backward pass z gradient clipping
     optimizer.zero_grad()
     loss.backward()
+    
+    # ✅ BARDZO WAŻNE: Gradient clipping (zapobiega exploding gradients)
+    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.5)
+    
     optimizer.step()
     
-    # Zwróć straty do logowania
-    return actor_loss.item(), critic_loss.item()
+    return actor_loss.item(), critic_loss.item(), entropy.item()
+
 
 def load_data_from_db():
     
@@ -300,131 +346,334 @@ def save_checkpoint(model, optimizer, epoch, filename):
     torch.save(checkpoint, filename)
     print(f"Checkpoint zapisany: {filename}")
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def train_rl_model():
+    """
+    Trening modelu RL z wykorzystaniem PPO.
+    """
 
-env = RacingEnv()
-state_dim = env.observation_space.shape[0]
-model = ActorCritic(state_dim, env.action_space).to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-buffer = RolloutBuffer()
-all_total_rewards = []
-num_epochs = 500
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-RACES_PER_EPOCH = 10
+    env = RacingEnv()
+    state_dim = env.observation_space.shape[0]
+    model = ActorCritic(state_dim, env.action_space).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
+    buffer = RolloutBuffer()
+    all_total_rewards = []
+    all_epoch_rewards = []  # Nagroda na epokę (suma 100 wyścigów)
+    all_race_rewards = []   # Nagroda na pojedynczy wyścig
+    num_epochs = 100
 
-
-try:
-    scaler_minmax_X = joblib.load("models/scalerX_min_max_RL.pkl")
-    scaler_robust_X = joblib.load("models/scalerX_robust_RL.pkl")
-except:
-    data = load_data_from_db()
-    X = create_x(data)
-    scaler_minmax_X, scaler_robust_X = create_scalers(X)
-    joblib.dump(scaler_minmax_X, "models/scalerX_min_max_RL.pkl")
-    joblib.dump(scaler_robust_X, "models/scalerX_robust_RL.pkl")
+    RACES_PER_EPOCH = 50
+    PPO_EPOCHS = 10
+    BATCH_SIZE = 64
 
 
+    try:
+        scaler_minmax_X = joblib.load("models/scalerX_min_max_RL.pkl")
+        scaler_robust_X = joblib.load("models/scalerX_robust_RL.pkl")
+    except:
+        data = load_data_from_db()
+        X = create_x(data)
+        scaler_minmax_X, scaler_robust_X = create_scalers(X)
+        joblib.dump(scaler_minmax_X, "models/scalerX_min_max_RL.pkl")
+        joblib.dump(scaler_robust_X, "models/scalerX_robust_RL.pkl")
 
-for epoch in range(num_epochs):
 
-    epoch_total_reward = 0
-    
-    for race_epoch in range(RACES_PER_EPOCH):
 
-        end_et = [734.0,1032.0,1932.0] # 11592.0
-        total_steps = [1653,2692,5007] # 30922
-        usage_multiplier = [1.0,3.0]
-        no_rain = [True,False]
+    for epoch in range(num_epochs):
 
-        i_time = random.choice([0,1,2])
-        i_usage = random.choice([0,1])
-        i_rain = random.choice([0,1])
-        end_et = end_et[i_time]
-        total_steps = total_steps[i_time]
-        usage_mult = usage_multiplier[i_usage]
-        no_rain = no_rain[i_rain]
-
-        obs = env.reset(end_et = end_et,total_steps=total_steps,usage_multiplier=usage_mult,no_rain=no_rain)
-        done = False  
-
-        obs = scale_single_input(obs, scaler_minmax_X, scaler_robust_X)
-
-        race_reward = 0
+        epoch_total_reward = 0
         
-        while not done:
+        for race_epoch in range(RACES_PER_EPOCH):
+
+            end_et = [734.0,1032.0,1932.0] # 11592.0
+            total_steps = [1653,2692,5007] # 30922
+            usage_multiplier = [1.0,3.0]
+            no_rain = [True,False]
+
+
+            i_time = random.choice([0,1,2])
+            i_usage = random.choice([0,1])
+            i_rain = random.choice([0,1])
+
+            # i_time = 2
+            # i_usage = 1
+            # i_rain = 1
+            
+            end_et = end_et[i_time]
+            total_steps = total_steps[i_time]
+            usage_mult = usage_multiplier[i_usage]
+            no_rain = no_rain[i_rain]
+
             
 
-            # Wybierz akcję na podstawie bieżącej obserwacji
-            actions, log_prob, value = select_action(model, obs)
+            obs = env.reset(end_et = end_et,total_steps=total_steps,usage_multiplier=usage_mult,no_rain=no_rain)
+            done = False  
+
+            obs = scale_single_input(obs, scaler_minmax_X, scaler_robust_X)
+
+            race_reward = 0
             
-            # Wykonaj akcję. 
-            next_obs, reward, done, _ = env.step(actions)
+            while not done:
+                
 
-            next_obs = scale_single_input(next_obs, scaler_minmax_X, scaler_robust_X)
+                # Wybierz akcję na podstawie bieżącej obserwacji
+                actions, log_prob, value = select_action(model, obs)
+                
+                # Wykonaj akcję. 
+                next_obs, reward, done, _ = env.step(actions)
 
-            # --- POPRAWKA 2: Zapisuj 'obs' (stan s_t) ---
-            buffer.states.append(obs) 
-            # ---------------------------------------------
+                reward /= 100.0  # Normalizacja nagrody
 
-            if isinstance(actions, list):
-                # Połącz listę tensorów akcji w jeden tensor [0, 1]
-                actions_tensor = torch.tensor(actions) 
-                # Zsumuj log-prawdopodobieństwa dla wspólnej akcji
-                log_prob_tensor = sum(log_prob)
-            else:
-                # Jeśli to nie lista, po prostu użyj wartości
-                actions_tensor = actions
-                log_prob_tensor = log_prob
+                next_obs = scale_single_input(next_obs, scaler_minmax_X, scaler_robust_X)
 
-            buffer.actions.append(actions_tensor)
-            buffer.log_probs.append(log_prob_tensor)
-            buffer.values.append(value)
-            buffer.rewards.append(torch.tensor(reward, dtype=torch.float32))
-            buffer.dones.append(done)
+                # --- POPRAWKA 2: Zapisuj 'obs' (stan s_t) ---
+                buffer.states.append(obs) 
+                # ---------------------------------------------
 
-            # Zaktualizuj stan na następną iterację
-            obs = next_obs
-            race_reward += reward
-            
-            # --- POPRAWKA 3: Usunięto blok 'if done: reset()' ---
-            # Pętla 'while' sama się zakończy, a reset nastąpi
-            # na początku następnej epoki.
-        epoch_total_reward += race_reward
-        # Koniec epizodu (rolloutu)
-        
+                if isinstance(actions, list):
+                    # Połącz listę tensorów akcji w jeden tensor [0, 1]
+                    actions_tensor = torch.tensor(actions) 
+                    # Zsumuj log-prawdopodobieństwa dla wspólnej akcji
+                    log_prob_tensor = sum(log_prob)
+                else:
+                    # Jeśli to nie lista, po prostu użyj wartości
+                    actions_tensor = actions
+                    log_prob_tensor = log_prob
+
+                buffer.actions.append(actions_tensor)
+                buffer.log_probs.append(log_prob_tensor)
+                buffer.values.append(value)
+                buffer.rewards.append(torch.tensor(reward, dtype=torch.float32))
+                buffer.dones.append(done)
+
+                # Zaktualizuj stan na następną iterację
+                obs = next_obs
+                race_reward += reward
+                
+              
+            epoch_total_reward += race_reward
+            all_race_rewards.append(race_reward)
+            # Koniec epizodu (rolloutu)
+        # epoch_total_reward /= 1000.0  # Normalizacja nagrody
         # PPO update po zebraniu danych z całego epizodu
-        ppo_update(model, optimizer, buffer, device)
-        total_reward = sum([r.item() for r in buffer.rewards])
-        all_total_rewards.append(total_reward)
+       
+        rewards_list = [r.item() for r in buffer.rewards]
+        values_list = [v.item() for v in buffer.values]
+        dones_list = buffer.dones
         
-        # if epoch % 10 == 0:
+        advantages, returns = compute_gae(rewards_list, values_list, dones_list)
+        
+        # Zapisz w buforze (żeby ppo_update_batch miał dostęp)
+        buffer.advantages = advantages
+        buffer.returns = returns
+        
+        # ✅ PPO update z mini-batchami i wielokrotnymi epoch
+        num_samples = len(buffer.states)
+        total_actor_loss = 0
+        total_critic_loss = 0
+        total_entropy = 0
+        num_updates = 0
+        
+        for ppo_epoch in range(PPO_EPOCHS):
+            # Losowo przemieszaj dane
+            indices = np.random.permutation(num_samples)
             
-        print(f"Epoch {epoch}, total reward {total_reward}")
-        print(buffer.actions)
-        print(buffer.rewards)
+            # Mini-batche
+            for start in range(0, num_samples, BATCH_SIZE):
+                end = min(start + BATCH_SIZE, num_samples)
+                batch_indices = indices[start:end]
+                
+                actor_loss, critic_loss, entropy = ppo_update_batch(
+                    model, optimizer, buffer, batch_indices, device
+                )
+                
+                total_actor_loss += actor_loss
+                total_critic_loss += critic_loss
+                total_entropy += entropy
+                num_updates += 1
         
-        # Wyczyść bufor po aktualizacji, gotowy na nową epokę
+        avg_actor_loss = total_actor_loss / num_updates
+        avg_critic_loss = total_critic_loss / num_updates
+        avg_entropy = total_entropy / num_updates
+        
+        all_epoch_rewards.append(epoch_total_reward)
+        
+        # Logowanie
+        if epoch % 10 == 0:
+            avg_race_reward = epoch_total_reward / RACES_PER_EPOCH
+            recent_avg = np.mean(all_race_rewards[-100:]) if len(all_race_rewards) >= 100 else np.mean(all_race_rewards)
+            
+            print(f"\n{'='*60}")
+            print(f"Epoch {epoch}/{num_epochs}")
+            print(f"  Epoch Total: {epoch_total_reward:.4f} (z {RACES_PER_EPOCH} wyścigów)")
+            print(f"  Avg per race: {avg_race_reward:.4f}")
+            print(f"  Last 100 races avg: {recent_avg:.4f}")
+            print(f"  Actor Loss: {avg_actor_loss:.4f}")
+            print(f"  Critic Loss: {avg_critic_loss:.4f}")
+            print(f"  Entropy: {avg_entropy:.4f}")
+            print(f"{'='*60}")
+        
+        # Wyczyść bufor
         buffer.clear()
+        
+        # Checkpoint co 50 epok
+        if epoch % 10 == 0 and epoch > 0:
+            save_checkpoint(model, optimizer, epoch, f"models/RL_agent_epoch{epoch}.pth")
+    
+    # Finalny checkpoint
+    save_checkpoint(model, optimizer, num_epochs, "models/RL_agent_final.pth")
+    
+    # ✅ Wykres POJEDYNCZYCH WYŚCIGÓW (prawdziwy postęp)
+    plt.figure(figsize=(14, 6))
+    plt.plot(all_race_rewards, alpha=0.3, label='Pojedynczy wyścig')
+    
+    # Średnia krocząca z 50 wyścigów
+    rolling_avg = pd.Series(all_race_rewards).rolling(window=50).mean()
+    plt.plot(rolling_avg, color='red', linewidth=2, label='Średnia krocząca (50)')
+    
+    plt.title('Postęp Uczenia (Nagroda za Pojedynczy Wyścig)')
+    plt.xlabel('Numer wyścigu')
+    plt.ylabel('Nagroda (znormalizowana)')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.savefig('ai/rl_learning_plot/rl_reward_per_race.png', dpi=150)
+    plt.show()
 
-save_checkpoint(model, optimizer, epoch, "models/RL_agent.pth")
 
 
-print("Trening zakończony. Rysowanie wykresu nagrody...")
+# import torch
+# from torchview import draw_graph
+# import graphviz
+# from gymnasium import spaces
 
-plt.figure(figsize=(12, 6))
-plt.plot(all_total_rewards, label='Całkowita nagroda')
+# # 1. Konfiguracja modelu
 
-# --- (Opcjonalnie, ale BARDZO ZALECANE) Wygładzony wykres ---
-# Nagrody w RL bardzo "skaczą". Średnia krocząca pokazuje prawdziwy trend.
-rolling_avg = pd.Series(all_total_rewards).rolling(window=50).mean() # Średnia z 50 epok
-plt.plot(rolling_avg, label='Średnia krocząca', color='red', linewidth=2)
-# -----------------------------------------------------------
+# action_space = spaces.MultiDiscrete([
+#                                                 2, # Pit stop or not
+#                                                 # 2, # Confirm pit stop or not
+#                                                 5, # Tire change (0-4) No, soft, medium, hard, wet
+#                                                 2, # Repair or not (0-1)
+#                                                 6, # Fuel * 0.2 (0-20)
+#                                                 ])
+# model = ActorCritic(state_dim=26, action_space=action_space)
 
-plt.title('Postęp Uczenia Modelu RL (Nagroda na Epokę)')
-plt.xlabel('Epoka')
-plt.ylabel('Całkowita Nagroda')
-plt.legend()
-plt.grid(True)
-plt.savefig(f'ai/rl_training_race_historyplots/rl_reward.png', dpi=150)
+# # 2. Przygotowanie danych (X oraz Stan)
+# dummy_x = torch.randn(1, 1, 26)
+# # Stan dla LSTM: (h_0, c_0) -> rozmiar [layers, batch, hidden]
 
 
+# # 3. Generowanie grafu
+# model_graph = draw_graph(
+#     model, 
+#     input_data=dummy_x,  # Przekazujemy X i Stan
+#     depth=1, 
+#     expand_nested=True,
+#     save_graph=False  # Nie zapisuj jeszcze automatycznie
+# )
+
+# # Zamiast render(), wypisz źródło:
+# print(model_graph.visual_graph.source)
+
+# from graphviz import Digraph
+# from graphviz import Digraph
+
+# dot = Digraph(comment='PPO - Główne Fazy', format='png')
+# dot.attr(rankdir='LR', size='12,6')  # Poziomo!
+# dot.attr('node', shape='box', style='rounded,filled', fontname='Arial', fontsize='12')
+
+# # 3 główne fazy
+# with dot.subgraph(name='cluster_rollout') as c:
+#     c.attr(style='filled', color='lightgrey', label='FAZA 1: Rollout')
+#     c.node('r1', '50 wyścigów\n× ~1000 kroków')
+#     c.node('r2', 'Zbieranie:\n(s, a, r, V(s))')
+#     c.edge('r1', 'r2')
+
+# with dot.subgraph(name='cluster_gae') as c:
+#     c.attr(style='filled', color='lightgreen', label='FAZA 2: GAE')
+#     c.node('g1', 'Obliczenie\nδ_t dla każdego kroku')
+#     c.node('g2', 'Akumulacja wstecz:\nÂ_t = Σ(γλ)^l δ')
+#     c.edge('g1', 'g2')
+
+# with dot.subgraph(name='cluster_ppo') as c:
+#     c.attr(style='filled', color='lightblue', label='FAZA 3: PPO Update')
+#     c.node('p1', '10 epok\n× mini-batche (64)')
+#     c.node('p2', 'L = -L^CLIP\n+ 0.5·L^VF\n- 0.05·H')
+#     c.node('p3', 'Backprop\n+ grad clip')
+#     c.edge('p1', 'p2')
+#     c.edge('p2', 'p3')
+
+# # Połączenia między fazami
+# dot.edge('r2', 'g1', label='Buffer\n~50k kroków')
+# dot.edge('g2', 'p1', label='Advantages\n+ Returns')
+# dot.edge('p3', 'r1', label='Nowa epoka', style='dashed')
+
+# print(dot.source)
+# print("Zapisano: ppo_simplified.png")
+
+
+
+
+
+# def ppo_update(model, optimizer, buffer, device, clip_eps=0.2):
+#     """
+#     Poprawiona funkcja PPO update.
+#     """
+    
+#     # --- 1. Konwersja danych z bufora na tensory GPU ---
+    
+#     states = torch.tensor(np.array(buffer.states), dtype=torch.float32).to(device)
+    
+#     # POPRAWKA BŁĘDU 2: Przekonwertuj listę tensorów akcji [tensor([0,1]), ...]
+#     # na jeden duży tensor (N_kroków, N_akcji) na GPU
+#     actions = torch.stack(buffer.actions).to(device) 
+    
+#     old_log_probs = torch.stack(buffer.log_probs).to(device)
+#     # values = torch.stack(buffer.values).squeeze().to(device)
+#     values = torch.stack(buffer.values).reshape(-1).to(device)
+    
+    
+#     # POPRAWKA BŁĘDU 3: Przekonwertuj listę tensorów nagród na listę float
+#     rewards_list = [r.item() for r in buffer.rewards]
+#     dones_list = buffer.dones
+
+#     # --- 2. Obliczenia na CPU (GAE) ---
+#     advantages, returns = compute_gae(rewards_list, values.tolist(), dones_list)
+#     advantages = torch.tensor(advantages, dtype=torch.float32).to(device)
+#     returns = torch.tensor(returns, dtype=torch.float32).to(device)
+
+#     # --- 3. Forward pass i obliczenie strat ---
+    
+#     # action_probs to lista [tensor_dist_pit, tensor_dist_opony]
+#     action_probs, values_new = model(states) 
+
+#     # Oblicz log_probs dla MultiDiscrete
+#     log_probs_new = []
+#     for i, probs in enumerate(action_probs):
+#         dist = torch.distributions.Categorical(probs)
+        
+#         # POPRAWKA BŁĘDU 1: Użyj "krojonego" tensora 'actions' z GPU
+#         # 'actions' ma kształt (N_kroków, N_akcji)
+#         # 'acts' będzie miało kształt (N_kroków,)
+#         acts = actions[:, i] 
+        
+#         # dist (GPU) i acts (GPU) są teraz na tym samym urządzeniu
+#         log_probs_new.append(dist.log_prob(acts))
+        
+#     log_probs_new = torch.stack(log_probs_new).sum(dim=0)
+
+#     # PPO ratio
+#     ratio = torch.exp(log_probs_new - old_log_probs.detach())
+#     surr1 = ratio * advantages
+#     surr2 = torch.clamp(ratio, 1-clip_eps, 1+clip_eps) * advantages
+
+#     actor_loss = -torch.min(surr1, surr2).mean()
+#     critic_loss = F.mse_loss(values_new.squeeze(), returns)
+#     loss = actor_loss + 0.5 * critic_loss
+
+#     optimizer.zero_grad()
+#     loss.backward()
+#     optimizer.step()
+    
+#     # Zwróć straty do logowania
+#     return actor_loss.item(), critic_loss.item()

@@ -367,4 +367,30 @@ def train_model():
 
     print("✅ Model saved to models/lstm_model.pth")
 
-# train_model()
+
+# import torch
+# from torchview import draw_graph
+# import graphviz
+
+# # 1. Konfiguracja modelu
+# model = LSTMStatePredictor(input_size=37, hidden_size=256, output_size=11, num_layers=1)
+
+# # 2. Przygotowanie danych (X oraz Stan)
+# dummy_x = torch.randn(1, 1, 37)
+# # Stan dla LSTM: (h_0, c_0) -> rozmiar [layers, batch, hidden]
+# dummy_h = torch.randn(1, 1, 256)
+# dummy_c = torch.randn(1, 1, 256)
+# dummy_state = (dummy_h, dummy_c)
+
+# # 3. Generowanie grafu
+# model_graph = draw_graph(
+#     model, 
+#     input_data=(dummy_x, dummy_state),  # Przekazujemy X i Stan
+#     depth=1, 
+#     expand_nested=True,
+#     save_graph=False  # Nie zapisuj jeszcze automatycznie
+# )
+
+# # Zamiast render(), wypisz źródło:
+# print(model_graph.visual_graph.source)
+

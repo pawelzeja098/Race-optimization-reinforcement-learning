@@ -32,13 +32,19 @@ if __name__ == "__main__":
                                         2, # Repair or not (0-1)
                                         6, # Fuel * 0.2 (0-20)
                                         ])
-    state_dim = 26
+    state_dim = 27
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Używane urządzenie: {device}")
+    
+    # ✅ 2. Utwórz model i od razu przenieś go na device
+    model = ActorCritic(state_dim, action_space).to(device)
    
-    model = ActorCritic(state_dim, action_space) 
+    # model = ActorCritic(state_dim, action_space) 
 
     
-    path = "models/RL_agent.pth"
-    checkpoint = torch.load(path, map_location=torch.device('GPU' if torch.cuda.is_available() else 'cpu'))
+    path = "models/RL_agent_final.pth"
+    checkpoint = torch.load(path, map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
 
     try:
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -56,7 +62,7 @@ if __name__ == "__main__":
     client.start()  # To uruchamia wątek odbierania (Wątek 1)
 
     # To uruchamia wątek przetwarzania RL (Wątek 2)
-    rl_thread = threading.Thread(target=run_rl_agent, args=(client, "DummyModel", scaler_minmax_X, scaler_robust_X), daemon=True)
+    rl_thread = threading.Thread(target=run_rl_agent, args=(client, model, scaler_minmax_X, scaler_robust_X), daemon=True)
     rl_thread.start()
 
     print("System działa. Główny wątek jest wolny.")

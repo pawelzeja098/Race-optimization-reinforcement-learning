@@ -200,26 +200,15 @@ def filtr_json_files(telem_file_raw, scoring_file_raw):
         filtered_data_telemetry.append(subset)
         telemetry_records_len += 1
         curr_tel += 1
-        # print(json.dumps(subset, indent=2))
-    
-    # plt.plot(delta_fuel_hist)
-    # plt.title("Delta fuel per step")
-    # plt.show()
-
-    # plt.plot(delta_tires_hist)
-    # plt.title("Delta tires[0] per step")
-    # plt.show()
+        
 
     return filtered_data_telemetry, filtered_data_scoring
-    # with open(telem_file_filtered, "w") as f:
-    #     json.dump(filtered_data_telemetry, f, indent=2)
-    # with open(scoring_file_filtered, "w") as f:
-    #     json.dump(filtered_data_scoring, f, indent=2)
+
 
 
 def extract_state(telem_file_raw, scoring_file_raw):
         filtered_data_telemetry, filtered_data_scoring = filtr_json_files(telem_file_raw,scoring_file_raw)
-        zjebany_wyscig = False
+       
         data_state = []
         
         scoring_all = filtered_data_scoring
@@ -232,22 +221,9 @@ def extract_state(telem_file_raw, scoring_file_raw):
             telemetry = copy.deepcopy(telemetry_all[i])
             scoring = copy.deepcopy(scoring_all[i])
             #SPRAWDZIC CZY NA POCZATKU JEST 0
-            if scoring["mLapDist"] <= 0.0:
-                
-                zjebany_wyscig = True
+          
 
-            # if i < 50 and zjebany_wyscig:
-            #     # print("Kolejne okrazenie")
-            #     # # for (ks, vs), (kt, vt) in zip(scoring.items(), telemetry.items()):
-                
-            #     #     print("scoring:", ks, vs)
-            #     #     print("telemetry:", kt, vt)
-            #     print(scoring["mTotalLapDistance"])
-            #     print(scoring["mLapDist"])
-
-            #     print("\n")
-            #     print("-----")
-                
+        
             if telemetry["mLastImpactET"] <= 0:
                 telemetry["mLastImpactET"] = 0.0
             else:

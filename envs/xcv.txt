@@ -1,0 +1,27 @@
+0.0,   # Tank capacity
+        0.0,   # Path wetness
+        0.0,   # Wheel wear
+        0.0,   # Wheel wear
+        0.0,   # Wheel wear
+        0.0,   # Wheel wear
+        0.0,   #step ratio
+        0.0,   # Raining
+        0.0, 
+        0.0, 
+        0.0, 
+        0.0, 
+        0.0, 
+        0.0, 
+        0.0, 
+        0.0,  # dent severities
+        0.0,   # Total laps
+        0.0,   # Num pitstops
+        0.0,   # tire compound index
+        1.0,   # multiplier
+        100.0,   # Wheel temperature
+        100.0,   # Wheel temperature
+        100.0,   # Wheel temperature
+        100.0,   # Wheel temperature   
+        3.0,   # Ambient temp
+        8.0,   # Track temp
+        0.0,   # End ET 

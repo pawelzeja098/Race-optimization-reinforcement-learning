@@ -6,7 +6,6 @@ self.wheel3_wear,
 self.wheel4_wear,
 self.path_wetness,
 self.raining,
-
 self.dent_severity[0],
 self.dent_severity[1],
 self.dent_severity[2],

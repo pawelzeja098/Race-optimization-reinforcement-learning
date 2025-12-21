@@ -366,9 +366,27 @@ class RacingEnv(gym.Env):
 
     def compute_reward(self):
      
+        # reward = 0.0
+        # steps_this_lap = self.curr_step - self.last_lap_step
+        # reward += 100 + (1000 - steps_this_lap) * 0.1  # 606 is median steps per lap
+        # return reward
         reward = 0.0
         steps_this_lap = self.curr_step - self.last_lap_step
-        reward += 100 + (1000 - steps_this_lap) * 0.1  # 606 is median steps per lap
+        
+        # Nagroda bazowa za ukończenie okrążenia
+        base_reward = 100
+        
+        # Bonus za szybkość (mediana to 606 kroków)
+        median_steps = 606
+        time_bonus = max(0, (median_steps - steps_this_lap) * 0.5)
+        
+        # Kara za wolne okrążenie
+        if steps_this_lap > median_steps * 1.5:  # 50% wolniej niż mediana
+            time_penalty = (steps_this_lap - median_steps * 1.5) * 0.2
+            reward -= time_penalty
+        
+        reward = base_reward + time_bonus
+        
         return reward
 
              
@@ -387,18 +405,22 @@ class RacingEnv(gym.Env):
             # reward = 0.0
             if self.fuel_tank_capacity <= 0.05:
                 done = True
-                reward = -500.0
+                reward = -1000.0
                 
-                self.make_plots()
+                # self.make_plots()
                 self.history = []
                 break
 
             if self.curr_step >= self.total_steps:
                 done = True
-                reward = 100.0 * self.lap_dist
+                reward = 1000.0 * self.lap_dist
                 # reward += 50000 * self.laps / self.total_steps
+
+                laps_bonus = self.laps * 250
+
+                reward += laps_bonus
                 
-                self.make_plots()
+                # self.make_plots_impacts()
                 self.history = []
                 break
             
@@ -786,7 +808,75 @@ class RacingEnv(gym.Env):
 
         return obs, reward, done, {}
 
+    def make_plots_weather(self):
+        history_array = np.array(self.history)
+        plt.figure(figsize=(20, 5))
+        plt.subplot(1, 4, 1)
+        plt.plot(history_array[:, 2], label='Wilgotność toru', color='purple')
+        plt.title('Wilgotność Toru')
+        plt.xlabel('Krok czasowy')
+        plt.ylabel('Wartość')
+        plt.legend()
+        plt.grid(True)
+        
+        plt.subplot(1, 4, 2)
+        plt.plot(history_array[:, 9], label='Natężenie deszczu', color='blue')
+        plt.title('Natężenie Deszczu')
+        plt.xlabel('Krok czasowy')
+        plt.ylabel('Wartość')
+        plt.legend()
+        plt.grid(True)
+        
 
+        plt.subplot(1, 4, 3)
+        plt.plot(history_array[:, 33], label='Temperatura otoczenia', color='brown')
+        plt.title('Temperatura Otoczenia')
+        plt.xlabel('Krok czasowy')
+        plt.ylabel('Temperatura (°C)')
+        plt.legend()
+        plt.grid(True)
+
+        # 18. Track Temperature
+        plt.subplot(1, 4, 4)
+        plt.plot(history_array[:, 34], label='Temperatura toru', color='cyan')
+        plt.title('Temperatura Toru')
+        plt.xlabel('Krok czasowy')
+        plt.ylabel('Temperatura (°C)')
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+    
+    def make_plots_impacts(self):
+        history_array = np.array(self.history)
+        plt.figure(figsize=(20, 5))
+        plt.subplot(1, 3, 1)
+        plt.plot(history_array[:, 10], label='Flaga uderzenia', color='gray')
+        plt.title('Flaga Uderzenia')
+        plt.xlabel('Krok czasowy')
+        plt.ylabel('Wartość')
+        plt.legend()
+        plt.grid(True)
+
+        plt.subplot(1, 3, 2)
+        plt.plot(history_array[:, 32], label='Siła uderzenia', color='darkred')
+        plt.title('Siła Uderzenia')
+        plt.xlabel('Krok czasowy')
+        plt.ylabel('Siła [N]')
+        plt.legend()
+        plt.grid(True)
+
+        plt.subplot(1, 3, 3)
+        for i in range(8):
+            plt.plot(history_array[:, 15 + i], label=f'Element {i}')
+        plt.title('Uszkodzenia pojazdu')
+        plt.xlabel('Krok czasowy')
+        plt.ylabel('Stopień uszkodzenia')
+        plt.legend(fontsize=6)
+        plt.grid(True)
+
+        plt.tight_layout()
+        plt.show()
 
     def make_plots(self):
         history_array = np.array(self.history)

@@ -33,12 +33,6 @@ def generate_weather_conditions(num_conditions,mRaining_start=0.0,mAmbientTemp_s
         }
         weather_conditions.append(condition)
 
-        # Deszcz: jeśli nie pada, bardzo mała szansa na start
-        
-
-        # --- PĘTLA GŁÓWNA (np. update frame) ---
-
-        # 1. LOGIKA ZMIANY POGODY (Twoja logika z małymi poprawkami)
         if no_rain:
             mRaining = 0.0
             raining_change = 0.0
@@ -61,17 +55,14 @@ def generate_weather_conditions(num_conditions,mRaining_start=0.0,mAmbientTemp_s
                     raining_time = 0
                     mRaining = 0.0
 
-        # 2. WYKRYCIE ZMIANY (Trigger)
-        # Sprawdzamy, czy cel się zmienił (czy zmieniło się mRaining)
+        #
         if mRaining != last_raining_value:
             target_wetness = mRaining
             last_raining_value = mRaining
             
             # Obliczamy opóźnienie TYLKO RAZ przy zmianie
             if target_wetness > mPathWetness:
-                # MOKNIĘCIE (Wetting)
-                # Gorący tor (30C) = duży mnożnik = długo moknie (parowanie)
-                # Zimny tor (10C) = mały mnożnik = szybko moknie
+               
                 temp_factor = max(1, mAmbientTemp) 
                 gap_timer = round(randint(2, 5) * temp_factor, 0)
                 
@@ -110,7 +101,7 @@ def generate_weather_conditions(num_conditions,mRaining_start=0.0,mAmbientTemp_s
             next_temp = mAmbientTemp + change
         
         # Opcjonalnie: Zmień prędkość zmiany przy każdym nowym celu, żeby było ciekawiej
-        # smoothing_speed = uniform(0.001, 0.008)
+        smoothing_speed = uniform(0.001, 0.008)
 
         # 2. Fizyka zmiany (LERP)
         # To jedno proste równanie zastępuje change_per_step i how_quickly
