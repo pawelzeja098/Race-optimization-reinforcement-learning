@@ -76,17 +76,17 @@ class RacingEnv(gym.Env):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.state = None
         # self.scaler_X = joblib.load("models/scaler2_X.pkl")
-        self.scaler_minmax_X = joblib.load("models/scalerX_min_max.pkl")
-        self.scaler_robust_X = joblib.load("models/scalerX_robust.pkl")
-        self.scaler_minmax_Y = joblib.load("models/scalerY_min_max.pkl")
-        self.scaler_robust_Y = joblib.load("models/scalerY_robust.pkl")
+        self.scaler_minmax_X = joblib.load("models/scalerX_min_max1.pkl")
+        self.scaler_robust_X = joblib.load("models/scalerX_robust1.pkl")
+        self.scaler_minmax_Y = joblib.load("models/scalerY_min_max1.pkl")
+        self.scaler_robust_Y = joblib.load("models/scalerY_robust1.pkl")
         # self.scaler_Y = joblib.load("models/scaler2_Y.pkl")
         self.h_c = None
         self.lap_checked = False
         self.target_fuel = 0.0
 
         self.LSTM_model = LSTMStatePredictor(input_size=X_SHAPE, hidden_size=256, output_size=Y_SHAPE, num_layers=1).to(device)
-        self.LSTM_model.load_state_dict(torch.load("models/lstmdeltaT_model.pth", map_location=device))
+        self.LSTM_model.load_state_dict(torch.load("models/lstmdeltaT_model1.pth", map_location=device))
         self.LSTM_model.eval()
         # self.curr_window = deque(maxlen=30)
 
@@ -121,6 +121,7 @@ class RacingEnv(gym.Env):
         0.0,   # Wheel wear
         0.0,   #step ratio
         0.0,   # Raining
+        # 0.0,   # End ET (normalized)
 
         
         0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,  # dent severities
@@ -135,7 +136,8 @@ class RacingEnv(gym.Env):
         100.0,   # Wheel temperature   
         3.0,   # Ambient temp
         8.0,   # Track temp
-        0.0,   # End ET 
+        0.0 #End ET raw
+        
 
     ], dtype=np.float32),
     high=np.array([
@@ -147,6 +149,7 @@ class RacingEnv(gym.Env):
         1.0,     # Wheel wear
         1.0,     #step ratio
         1.0,   # Raining
+        # 1.0,   # End ET (normalized)
         
         2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0,  # dent severities
         400.0,   # Total laps
@@ -160,7 +163,8 @@ class RacingEnv(gym.Env):
         600.0,   # Wheel temperature
         45.0,   # Ambient temp
         60.0,   # Track temp
-        86500.0,   # End ET
+        2000.0 #End ET raw
+        
     ], dtype=np.float32),
     dtype=np.float32
 )
@@ -248,6 +252,11 @@ class RacingEnv(gym.Env):
         self.refueled_amount = 0.0
         self.dent_severity = [0.0]*8
         self.last_lap_step = 0
+        
+        # Flagi reward shaping
+        self.just_pitted = False
+        self.just_repaired = False
+        self.fuel_before_pit = 0.0  # Poziom paliwa przed pit-stopem
 
         # weather_conditions = generate_weather_conditions(1)
 
@@ -335,6 +344,7 @@ class RacingEnv(gym.Env):
             self.wheel4_wear,
             self.curr_step/self.total_steps,
             self.raining,
+            # self.end_et/max_race_time,
             
             
             self.dent_severity[0],
@@ -358,6 +368,7 @@ class RacingEnv(gym.Env):
             self.track_temp,
             self.end_et
             
+            
         ], dtype=np.float32)
 
 
@@ -366,10 +377,6 @@ class RacingEnv(gym.Env):
 
     def compute_reward(self):
      
-        # reward = 0.0
-        # steps_this_lap = self.curr_step - self.last_lap_step
-        # reward += 100 + (1000 - steps_this_lap) * 0.1  # 606 is median steps per lap
-        # return reward
         reward = 0.0
         steps_this_lap = self.curr_step - self.last_lap_step
         
@@ -381,11 +388,67 @@ class RacingEnv(gym.Env):
         time_bonus = max(0, (median_steps - steps_this_lap) * 0.5)
         
         # Kara za wolne okrążenie
-        if steps_this_lap > median_steps * 1.5:  # 50% wolniej niż mediana
+        if steps_this_lap > median_steps * 1.5:
             time_penalty = (steps_this_lap - median_steps * 1.5) * 0.2
             reward -= time_penalty
         
         reward = base_reward + time_bonus
+        
+        # === 3. REWARD SHAPING - KARY ZA ZŁE DECYZJE ===
+        
+        # Kara za złe opony w deszczu
+        is_raining = self.raining > 0.1  # Pada jeśli > 10%
+        is_wet_track = self.path_wetness > 0.1
+        tire_type = self.tire_compound_index  # 0=soft, 1=med, 2=hard, 3=wet
+        
+        if is_wet_track and tire_type != 3:  # Slicki w deszczu
+            reward -= 50  # Duża kara - niebezpieczne!
+        elif not is_raining and tire_type == 3 and self.path_wetness < 0.1:  # Wet na suchym
+            reward -= 30  # Średnia kara - marnowanie tempa
+        # elif is_wet_track and tire_type in [0, 1, 2]:  # Suche opony na mokrym torze (bez deszczu)
+        #     reward -= 40  # Kara za slicki na mokrym - wolniejsze, ryzykowne
+        
+        # === NOWE: KARY ZA ZŁE OPONY WZGLĘDEM DŁUGOŚCI WYŚCIGU ===
+        if hasattr(self, 'just_pitted') and self.just_pitted:
+            race_duration = self.end_et  # Długość wyścigu w sekundach
+            
+            # Krótkie wyścigi (<30 min): Twarde/średnie to STRATA
+            if race_duration < 2000:  # 30 minut
+                if tire_type == 2:  # Hard - nie zużyjesz ich!
+                    reward -= 35
+                elif tire_type == 1:  # Medium - za konserwatywne
+                    reward -= 35
+                elif tire_type == 0:  # Soft - IDEALNE dla krótkich
+                    reward += 20
+            
+            # Długie wyścigi (>1h): Miękkie to STRATA (zbyt częste pit-stopy)
+            elif race_duration > 3600:  # 1 godzina
+                if tire_type == 0:  # Soft - za częste pit-stopy
+                    reward -= 25
+                elif tire_type == 2:  # Hard - IDEALNE dla długich
+                    reward += 20
+                elif tire_type == 1:  # Medium - dobry kompromis
+                    reward += 10
+        
+        # === KARY ZA ZŁE DECYZJE PALIWOWE ===
+        if hasattr(self, 'just_pitted') and self.just_pitted:
+            # Kara za przedwczesny pit-stop (za dużo paliwa)
+            if self.fuel_before_pit > 0.5:  # Więcej niż 50% paliwa
+                reward -= 30  # Kara za marnowanie czasu - niepotrzebny pit
+            
+            # Kara za bezsensowne dolanie (target < current)
+            if self.target_fuel < self.fuel_before_pit:
+                reward -= 40  # Duża kara - absurdalna decyzja
+            
+        
+       
+
+        # Kara za niepotrzebną naprawę
+        if hasattr(self, 'just_repaired') and self.just_repaired:
+            total_damage = sum(self.dent_severity)
+            if total_damage <= 1:  # Prawie brak uszkodzeń
+                reward -= 15  # Kara za marnowanie czasu w pit
+        
         
         return reward
 
@@ -419,7 +482,7 @@ class RacingEnv(gym.Env):
                 laps_bonus = self.laps * 250
 
                 reward += laps_bonus
-                
+                # self.make_plots()
                 # self.make_plots_impacts()
                 self.history = []
                 break
@@ -430,6 +493,9 @@ class RacingEnv(gym.Env):
                     reward = 0.0
                 else:
                     reward = self.compute_reward()
+                    # Resetuj flagi reward shaping DOPIERO PO obliczeniu
+                    self.just_pitted = False
+                    self.just_repaired = False
             
             if (prev_sector == 2.0 and self.sector == 0.0):
                 
@@ -547,7 +613,9 @@ class RacingEnv(gym.Env):
                         # Resetujemy stan pitstopu przy wjeździe
                         self.pit_stage = 0  
                         self.pit_timer = 0
-                        self.pitted = False 
+                        self.pitted = False
+                        self.just_pitted = True  # Flaga dla reward - KAŻDY pit, nie tylko ze zmianą opon
+                        self.fuel_before_pit = self.fuel_tank_capacity  # Zapisz poziom paliwa przed pit 
                 else:
                     # Wyjazd z pitu / Jazda po torze
                     if self.in_pits == 1.0:
@@ -580,7 +648,7 @@ class RacingEnv(gym.Env):
                     # --- FAZA 1: OPONY ---
                     if self.pit_stage == 0:
                         if action[1] > 0: # Jeśli jest żądanie zmiany opon
-                            self.pit_timer = 8 # Czas trwania wymiany
+                            self.pit_timer = 30 # Czas trwania wymiany
                             self.tire_compound_index = action[1] - 1.0
                             self.changed_tires_flag = 1.0
                             # for i in range(2, 6):
@@ -642,6 +710,7 @@ class RacingEnv(gym.Env):
                             
                             self.pit_timer = total_repair_time
                             self.is_repairing = 1.0
+                            self.just_repaired = True  # Flaga dla reward shaping
                             self.pit_stage = 3.5 # Wykonywanie napraw
                         else:
                             self.pit_stage = 4 # Brak napraw, koniec
@@ -771,6 +840,7 @@ class RacingEnv(gym.Env):
 
 
             # print(self.state)
+        max_race_time = 7200
 
         obs = np.array([
             self.fuel_tank_capacity,
@@ -781,6 +851,7 @@ class RacingEnv(gym.Env):
             self.wheel4_wear,
             self.curr_step/self.total_steps,
             self.raining,
+            # self.end_et/max_race_time,
             
             
             self.dent_severity[0],
@@ -803,6 +874,7 @@ class RacingEnv(gym.Env):
             self.ambient_temp,
             self.track_temp,
             self.end_et
+            
             
         ], dtype=np.float32)
 
@@ -910,7 +982,7 @@ class RacingEnv(gym.Env):
         plt.legend()
         plt.grid(True)
 
-
+  
         # 3-6. Wheel Wear (all 4 wheels)
         plt.subplot(6, 7, 4)
         plt.plot(history_array[:, 3], label='Wheel 1')
@@ -1116,8 +1188,8 @@ class RacingEnv(gym.Env):
 
         plt.tight_layout()
         plt.savefig(f'ai/rl_training_race_historyplots/race_history_plots_{self.num_race}.png', dpi=150)
-        # plt.show()
-        plt.close(fig)
+        plt.show()
+        # plt.close(fig)
 # ...existing code...
         
 

@@ -45,19 +45,19 @@ def generate_dent_severity(impact_magnitude):
         elements_to_damage = [3,4,5]
 
     if impact_magnitude < 100:
-        elem_damage_prob = 0.005
+        elem_damage_prob = 0.0
         damage_levels = [1.0]
         damage_probs = [1.0]
     elif impact_magnitude < 200:
-        elem_damage_prob = 0.01
+        elem_damage_prob = 0.0005
         damage_levels = [1.0]
         damage_probs = [1.0]
     elif impact_magnitude < 500:
-        elem_damage_prob = 0.02
+        elem_damage_prob = 0.001
         damage_levels = [1.0]
         damage_probs = [1.0]
     elif impact_magnitude < 1000:
-        elem_damage_prob = 0.05
+        elem_damage_prob = 0.005
         damage_levels = [1.0]
         damage_probs = [1.0]
     elif impact_magnitude < 2000:

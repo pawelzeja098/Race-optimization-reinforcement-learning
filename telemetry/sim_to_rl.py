@@ -26,6 +26,7 @@ def run_rl_agent(client, model, scaler_X_min_max, scaler_X_robust, usage_multipl
     scoring_log = []
     telemetry_log = []
     record_counter = 0
+    scoring_counter = 0  # Licznik wszystkich scoringów (do filtrowania co 2)
     
     # Utwórz katalog na logi
     os.makedirs(save_dir, exist_ok=True)
@@ -36,161 +37,169 @@ def run_rl_agent(client, model, scaler_X_min_max, scaler_X_robust, usage_multipl
     print(f"   Scoring:    {scoring_file}")
     print(f"   Telemetry:  {telemetry_file}")
 
-    while client.running:
-        try:
-            # Czekamy na dane (nie blokujemy procesora na 100%, ale reagujemy natychmiast)
-            data = client.queue.get(timeout=1.0)
-        except Empty:
-            continue
-
-        msg_type = data.get("Type")
-
-        # --- 1. Przyszło SCORING ---
-        if msg_type == "ScoringInfoV01":
-            
-            # Pobieramy dane gracza
-            vehicles = data.get("mVehicles", [])
-            # Szybkie szukanie gracza
-            player = next((v for v in vehicles if v.get("mIsPlayer")), None)
-
-            if not player:
+    try:
+        while client.running:
+            try:
+                # Czekamy na dane (nie blokujemy procesora na 100%, ale reagujemy natychmiast)
+                data = client.queue.get(timeout=1.0)
+            except Empty:
                 continue
-            
-            # ========================================
-            # LOGOWANIE: Zapisz KAŻDY scoring (nadpisuje poprzedni jeśli nie był sparowany)
-            # ========================================
-            last_scoring = data.copy()
-            last_scoring["mVehicles"] = [player]  # Tylko gracz, nie wszystkie pojazdy
-            record_counter += 1
-            scoring_record = {
-                "record_id": record_counter,
-                "timestamp": datetime.now().isoformat(),
-                "data": last_scoring
-            }
-            scoring_log.append(scoring_record)
-            # ========================================
-            
-            curr_sector = player["mSector"]
-            
-            # Debug: Pokaż zmianę sektora
-            if curr_sector != prev_sector:
-                print(f"🏁 Sektor: {prev_sector} → {curr_sector} (Okr: {player['mTotalLaps']})")
-           
-            # WARUNEK WYZWOLENIA:
-            # Właśnie wjechaliśmy w sektor 2 (a wcześniej byliśmy w innym, np. 1)
-            # I NIE mamy już oczekującego scoringu (żeby nie nadpisać go dwa razy w tej samej sekundzie)
-            if curr_sector == 0 and prev_sector == 2 and pending_scoring is None:
-                print(f"\n{'='*60}")
-                print(f"⚡ TRIGGER! Sektor 0 po 2 - Okrążenie {player['mTotalLaps']}")
-                print(f"{'='*60}")
-                
-                # Przygotowujemy dane scoringu pod extrakcję
-                data["mVehicles"] = [player]
-                pending_scoring = data
 
-            # Aktualizujemy historię sektora
-            prev_sector = curr_sector
+            msg_type = data.get("Type")
 
-        # --- 2. Przyszło TELEM ---
-        elif msg_type == "TelemInfoV01":
+            # --- 1. Przyszło SCORING ---
+            if msg_type == "ScoringInfoV01":
             
-            # ========================================
-            # LOGOWANIE: Zapisz TYLKO PIERWSZĄ telemetry po każdym scoringu
-            # ========================================
-            if last_scoring is not None:
-                telemetry_record = {
-                    "record_id": record_counter,  # Ten sam co scoring
-                    "timestamp": datetime.now().isoformat(),
-                    "data": data
-                }
-                telemetry_log.append(telemetry_record)
-                last_scoring = None  # Reset - następne telemetrie do nowego scoringu
+                # Pobieramy dane gracza
+                vehicles = data.get("mVehicles", [])
+                # Szybkie szukanie gracza
+                player = next((v for v in vehicles if v.get("mIsPlayer")), None)
+
+                if not player:
+                    continue
                 
-                # Auto-zapis co 20 par
-                if record_counter % 20 == 0:
-                    with open(scoring_file, 'w') as f:
-                        json.dump(scoring_log, f, indent=2)
-                    with open(telemetry_file, 'w') as f:
-                        json.dump(telemetry_log, f, indent=2)
-                    print(f"💾 [{record_counter}] Auto-zapis: {len(scoring_log)} par")
-            # ========================================
+                # ========================================
+                # LOGOWANIE: Zapisz CO DRUGI scoring
+                # ========================================
+                scoring_counter += 1
+                if scoring_counter % 2 == 0:  # Co drugi scoring
+                    last_scoring = data.copy()
+                    last_scoring["mVehicles"] = [player]  # Tylko gracz, nie wszystkie pojazdy
+                    record_counter += 1
+                    scoring_record = {
+                        "record_id": record_counter,
+                        "timestamp": datetime.now().isoformat(),
+                        "data": last_scoring
+                    }
+                    scoring_log.append(scoring_record)
+                # ========================================
+                
+                curr_sector = player["mSector"]
+                
+                # Debug: Pokaż zmianę sektora
+                if curr_sector != prev_sector:
+                    print(f"🏁 Sektor: {prev_sector} → {curr_sector} (Okr: {player['mTotalLaps']})")
             
-            # Czy mamy oczekujący Scoring? (Czy "zapadka" jest ustawiona?)
-            if pending_scoring is not None:
-                # TO JEST TEN MOMENT - Pierwsza telemetria po scoringu
+                # WARUNEK WYZWOLENIA:
+                # Właśnie wjechaliśmy w sektor 2 (a wcześniej byliśmy w innym, np. 1)
+                # I NIE mamy już oczekującego scoringu (żeby nie nadpisać go dwa razy w tej samej sekundzie)
+                if curr_sector == 0 and prev_sector == 2 and pending_scoring is None:
+                    print(f"\n{'='*60}")
+                    print(f"⚡ TRIGGER! Sektor 0 po 2 - Okrążenie {player['mTotalLaps']}")
+                    print(f"{'='*60}")
+                    
+                    # Przygotowujemy dane scoringu pod extrakcję
+                    data["mVehicles"] = [player]
+                    pending_scoring = data
+
+                # Aktualizujemy historię sektora
+                prev_sector = curr_sector
+
+            # --- 2. Przyszło TELEM ---
+            elif msg_type == "TelemInfoV01":
                 
-                try:
-                    # Dodajemy multiplier do telemetrii
-                    data["multiplier"] = usage_multiplier
+                # ========================================
+                # LOGOWANIE: Zapisz TYLKO PIERWSZĄ telemetry po każdym scoringu
+                # ========================================
+                if last_scoring is not None:
+                    telemetry_record = {
+                        "record_id": record_counter,  # Ten sam co scoring
+                        "timestamp": datetime.now().isoformat(),
+                        "data": data
+                    }
+                    telemetry_log.append(telemetry_record)
+                    last_scoring = None  # Reset - następne telemetrie do nowego scoringu
                     
-                    # 1. Łączymy zapamiętany Scoring z bieżącą Telemetrią
-                    raw_state = extract_state(data, pending_scoring)
+                    # Auto-zapis co 20 par
+                    if record_counter % 20 == 0:
+                        with open(scoring_file, 'w') as f:
+                            json.dump(scoring_log, f, indent=2)
+                        with open(telemetry_file, 'w') as f:
+                            json.dump(telemetry_log, f, indent=2)
                     
-                    # 2. Skalowanie
-                    input_vector = preprocess_data(np.array(raw_state), scaler_X_min_max, scaler_X_robust)
+                    if record_counter % 100 == 0:
+                        print(f"💾 [{record_counter}] Auto-zapis: {len(scoring_log)} par")
+                # ========================================
+                
+                # Czy mamy oczekujący Scoring? (Czy "zapadka" jest ustawiona?)
+                if pending_scoring is not None:
+                    # TO JEST TEN MOMENT - Pierwsza telemetria po scoringu
                     
-                   
-                    tensor_in = torch.FloatTensor(input_vector).unsqueeze(0)
-                    
-                    with torch.no_grad():
-                        print("Obliczam akcję modelu...")
-                        # Zakładam, że model zwraca logity lub akcje
-                        prediction = select_action_deterministic(model, input_vector)
+                    try:
+                        # Dodajemy multiplier do telemetrii
+                        data["multiplier"] = usage_multiplier
+                        
+                        # 1. Łączymy zapamiętany Scoring z bieżącą Telemetrią
+                        raw_state = extract_state(data, pending_scoring)
+                        
+                        # 2. Skalowanie
+                        input_vector = preprocess_data(np.array(raw_state), scaler_X_min_max, scaler_X_robust)
                         
                     
-                        print("Na podstawie stanu:")
-                        print("Ilość paliwa:" , raw_state[0])
-                        print("Postęp wyścigu:", raw_state[1])
-                        print("Zużycie opon LF:", raw_state[2])
-                        print("Zużycie opon RF:", raw_state[3])
-                        print("Zużycie opon LR:", raw_state[4])
-                        print("Zużycie opon RR:", raw_state[5])
-                        print("Wilgotność toru:", raw_state[6])
-                        print("Czy pada?:", raw_state[7])
-                        print("Uszkodzenia nadwozia:", raw_state[8:16])
-                        print("Liczba okrążeń:", raw_state[16])
-                        print("Liczba pit-stopów:", raw_state[17])
-                        print("Typ opon:", raw_state[18])
-                        print("Mnożnik zużycia:", raw_state[19])
-                        print("Temperatura opon LF:", raw_state[20])
-                        print("Temperatura opon RF:", raw_state[21])
-                        print("Temperatura opon LR:", raw_state[22])
-                        print("Temperatura opon RR:", raw_state[23])
-                        print("Temperatura otoczenia:", raw_state[24])
-                        print("Temperatura toru:", raw_state[25])
-                        print("Przewidywany czas zakończenia wyścigu:", raw_state[26])
-
-                        if prediction[0] == 1:
-                            print("Decyzja: Wjazd na pit-stop")
-
+                        tensor_in = torch.FloatTensor(input_vector).unsqueeze(0)
                         
-                        print(f"Action: {action_to_string(prediction)}")
-                       
+                        with torch.no_grad():
+                            print("Obliczam akcję modelu...")
+                            # Zakładam, że model zwraca logity lub akcje
+                            prediction = select_action_deterministic(model, input_vector)
+                            
+                            wheels = ["Soft", "Medium", "Hard", "Wet"]
+                        
+                            print("Na podstawie stanu:")
+                            print("Ilość paliwa:" , raw_state[0])
+                            print("Postęp wyścigu:", raw_state[1])
+                            print("Zużycie opon LF:", raw_state[2])
+                            print("Zużycie opon RF:", raw_state[3])
+                            print("Zużycie opon LR:", raw_state[4])
+                            print("Zużycie opon RR:", raw_state[5])
+                            print("Wilgotność toru:", raw_state[6])
+                            print("Natężenie deszczu:", raw_state[7])
+                            print("Uszkodzenia nadwozia:", raw_state[8:16])
+                            print("Liczba okrążeń:", raw_state[16])
+                            print("Liczba pit-stopów:", raw_state[17])
+                            print("Typ opon:", wheels[int(raw_state[18])])
+                            print("Mnożnik zużycia:", raw_state[19])
+                            print("Temperatura opon LF:", raw_state[20])
+                            print("Temperatura opon RF:", raw_state[21])
+                            print("Temperatura opon LR:", raw_state[22])
+                            print("Temperatura opon RR:", raw_state[23])
+                            print("Temperatura otoczenia:", raw_state[24])
+                            print("Temperatura toru:", raw_state[25])
+                            print("Przewidywany czas zakończenia wyścigu:", raw_state[26])
 
-                except Exception as e:
-                    print(f"Błąd w obliczeniach RL: {e}")
+                            if prediction[0] == 1:
+                                print("Decyzja: Wjazd na pit-stop")
+
+                            
+                            print(f"Action: {action_to_string(prediction)}")
+                        
+
+                    except Exception as e:
+                        print(f"Błąd w obliczeniach RL: {e}")
+                    
                 
-               
-                pending_scoring = None   
+                    pending_scoring = None   
 
-            
-
-    # ========================================
-    # ZAPIS KOŃCOWY po zakończeniu pętli
-    # ========================================
-    print(f"\n{'='*60}")
-    print(f"🏁 Koniec sesji - zapisuję dane końcowe...")
-    if scoring_log or telemetry_log:
-        with open(scoring_file, 'w') as f:
-            json.dump(scoring_log, f, indent=2)
-        with open(telemetry_file, 'w') as f:
-            json.dump(telemetry_log, f, indent=2)
-        print(f"✅ Zapisano:")
-        print(f"   Scoring:    {len(scoring_log)} rekordów -> {scoring_file}")
-        print(f"   Telemetry:  {len(telemetry_log)} rekordów -> {telemetry_file}")
-    else:
-        print("⚠️ Brak rekordów do zapisania")
-    print(f"{'='*60}\n")
+    except KeyboardInterrupt:
+        print("\n⚠️ Przerwano przez użytkownika (Ctrl+C)")
+    
+    finally:
+        # ========================================
+        # ZAPIS KOŃCOWY - wykonuje się ZAWSZE
+        # ========================================
+        print(f"\n{'='*60}")
+        print(f"🏁 Koniec sesji - zapisuję dane końcowe...")
+        if scoring_log or telemetry_log:
+            with open(scoring_file, 'w') as f:
+                json.dump(scoring_log, f, indent=2)
+            with open(telemetry_file, 'w') as f:
+                json.dump(telemetry_log, f, indent=2)
+            print(f"✅ Zapisano:")
+            print(f"   Scoring:    {len(scoring_log)} rekordów -> {scoring_file}")
+            print(f"   Telemetry:  {len(telemetry_log)} rekordów -> {telemetry_file}")
+        else:
+            print("⚠️ Brak rekordów do zapisania")
+        print(f"{'='*60}\n")
 
 
 def preprocess_data(raw_vector_x, scaler_X_min_max, scaler_X_robust):
@@ -201,7 +210,10 @@ def preprocess_data(raw_vector_x, scaler_X_min_max, scaler_X_robust):
     no_scaler_x = slice(0, 8)  # no scaler for X
     min_max_scaler_x = slice(8, 20)  # min-max scaler for X
     robust_scaler_x = slice(20, 28)  # robust scaler for X
- 
+    #POTEM JAK ZMIENIE NA NORM ENDET
+    # no_scaler_x = slice(0, 9)  # no scaler for X
+    # min_max_scaler_x = slice(9, 21)  # min-max scaler for X
+    # robust_scaler_x = slice(21, 28)  # robust scaler for X
     
     # raw_vector_x[cont_indices_x] ma kształt (19,)
     # Musimy go przekształcić na (1, 19) dla scalera
@@ -263,6 +275,7 @@ def extract_state(telem_file_raw, scoring_file_raw):
             telemetry["mWheel"][3]["mWear"],
             scoring["mAvgPathWetness"],
             scoring["mRaining"],
+            # round(scoring["mEndET"],5)/7200.0, potem jak zmienie na norm
 
             
             #MIN-MAX SCALER

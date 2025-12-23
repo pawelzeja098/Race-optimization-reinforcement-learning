@@ -142,7 +142,7 @@ class RolloutBuffer:
 
 
 
-def ppo_update_batch(model, optimizer, buffer, batch_indices, device, clip_eps=0.2, entropy_coef=0.01):
+def ppo_update_batch(model, optimizer, buffer, batch_indices, device, clip_eps=0.2, entropy_coef=0.05, debug=False):
     """
     ✅ CAŁKOWICIE PRZEPISANA FUNKCJA - naprawione wszystkie problemy
     """
@@ -181,6 +181,18 @@ def ppo_update_batch(model, optimizer, buffer, batch_indices, device, clip_eps=0
         else:
             advantages = advantages - adv_mean  # Tylko centrowanie
     
+    # ✅ NOWE: Normalizacja RETURNS (kluczowe dla stabilnego Critic!)
+    if len(returns) > 1:
+        ret_mean = returns.mean()
+        ret_std = returns.std()
+        
+        if ret_std > 1e-6:
+            returns_normalized = (returns - ret_mean) / (ret_std + 1e-8)
+        else:
+            returns_normalized = returns - ret_mean
+    else:
+        returns_normalized = returns
+    
     # ✅ 5. Forward pass
     logits_list, values_new = model(states)
     
@@ -203,22 +215,26 @@ def ppo_update_batch(model, optimizer, buffer, batch_indices, device, clip_eps=0
     log_probs_new = torch.stack(log_probs_new).sum(dim=0)
     entropy = torch.stack(entropy_list).sum(dim=0).mean()
     
-    # ✅ 8. PPO ratio z clip
+    # ✅ 8. PPO ratio (USUNIĘTE zbędne clipping!)
     ratio = torch.exp(log_probs_new - old_log_probs.detach())
-    
-    # TYKO DLA BEZPIECZEŃSTWA: ogranicz ratio do rozsądnych wartości
-    ratio = torch.clamp(ratio, 0.0, 10.0)
     
     surr1 = ratio * advantages
     surr2 = torch.clamp(ratio, 1 - clip_eps, 1 + clip_eps) * advantages
     
+    # 🔍 DIAGNOSTYKA - wypisz gdy debug=True
+    if debug:
+        print(f"\n🔍 DEBUG PPO:")
+        print(f"  Ratio: min={ratio.min().item():.3f}, max={ratio.max().item():.3f}, mean={ratio.mean().item():.3f}")
+        print(f"  Advantages: min={advantages.min().item():.3f}, max={advantages.max().item():.3f}, mean={advantages.mean().item():.3f}")
+        print(f"  Surr1 mean: {surr1.mean().item():.4f}, Surr2 mean: {surr2.mean().item():.4f}")
+    
     actor_loss = -torch.min(surr1, surr2).mean()
     
-    # ✅ 9. POPRAWKA: Critic loss z poprawnymi wymiarami
-    critic_loss = F.mse_loss(values_new, returns)
+    # ✅ 9. POPRAWKA: Critic loss ze ZNORMALIZOWANYMI returns
+    critic_loss = F.mse_loss(values_new, returns_normalized)
     
-    # ✅ 10. Total loss z clippingiem
-    loss = actor_loss + 0.5 * critic_loss - entropy_coef * entropy
+    # ✅ 10. Total loss - ZWIĘKSZONA WAGA CRITIC (0.5→1.0)
+    loss = actor_loss + 1.0 * critic_loss - entropy_coef * entropy
     
     # ✅ 11. WAŻNE: Sprawdź, czy loss nie jest NaN
     if torch.isnan(loss):
@@ -359,13 +375,13 @@ def train_rl_model():
     optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
     buffer = RolloutBuffer()
     all_total_rewards = []
-    all_epoch_rewards = []  # Nagroda na epokę (suma 100 wyścigów)
+    all_epoch_rewards = []  # Nagroda na epokę (suma wyścigów)
     all_race_rewards = []   # Nagroda na pojedynczy wyścig
-    num_epochs = 100
+    num_epochs = 30  # ⚡ KOMPROMIS: 20 epok × 150 = 3000 wyścigów (~3-4h)
 
-    RACES_PER_EPOCH = 50
+    RACES_PER_EPOCH = 150  # 150 × 5 decyzji = ~750 sampli (wystarczające)
     PPO_EPOCHS = 10
-    BATCH_SIZE = 64
+    BATCH_SIZE = 64  # 64/750 = 8.5% buffera (OK)
 
 
     try:
@@ -423,7 +439,9 @@ def train_rl_model():
                 # Wykonaj akcję. 
                 next_obs, reward, done, _ = env.step(actions)
 
-                reward /= 100.0  # Normalizacja nagrody
+                # ✅ REWARD CLIPPING - ogranicza ekstremalne wartości
+                reward = np.clip(reward, -100, 100)  # Clip PRZED normalizacją
+                reward /= 100.0  # Teraz reward w [-1, 1]
 
                 next_obs = scale_single_input(next_obs, scaler_minmax_X, scaler_robust_X)
 
@@ -451,7 +469,9 @@ def train_rl_model():
                 obs = next_obs
                 race_reward += reward
                 
-              
+                # --- POPRAWKA 3: Usunięto blok 'if done: reset()' ---
+                # Pętla 'while' sama się zakończy, a reset nastąpi
+                # na początku następnej epoki.
             epoch_total_reward += race_reward
             all_race_rewards.append(race_reward)
             # Koniec epizodu (rolloutu)
@@ -480,12 +500,15 @@ def train_rl_model():
             indices = np.random.permutation(num_samples)
             
             # Mini-batche
-            for start in range(0, num_samples, BATCH_SIZE):
+            for batch_idx, start in enumerate(range(0, num_samples, BATCH_SIZE)):
                 end = min(start + BATCH_SIZE, num_samples)
                 batch_indices = indices[start:end]
                 
+                # 🔍 DEBUG: Pierwszy batch PPO epoch 5 (środek treningu)
+                debug_mode = (ppo_epoch == 5 and batch_idx == 0)
+                
                 actor_loss, critic_loss, entropy = ppo_update_batch(
-                    model, optimizer, buffer, batch_indices, device
+                    model, optimizer, buffer, batch_indices, device, debug=debug_mode
                 )
                 
                 total_actor_loss += actor_loss
@@ -500,7 +523,7 @@ def train_rl_model():
         all_epoch_rewards.append(epoch_total_reward)
         
         # Logowanie
-        if epoch % 10 == 0:
+        if epoch % 1 == 0:
             avg_race_reward = epoch_total_reward / RACES_PER_EPOCH
             recent_avg = np.mean(all_race_rewards[-100:]) if len(all_race_rewards) >= 100 else np.mean(all_race_rewards)
             
@@ -509,6 +532,7 @@ def train_rl_model():
             print(f"  Epoch Total: {epoch_total_reward:.4f} (z {RACES_PER_EPOCH} wyścigów)")
             print(f"  Avg per race: {avg_race_reward:.4f}")
             print(f"  Last 100 races avg: {recent_avg:.4f}")
+            print(f"  Buffer size: ~{RACES_PER_EPOCH * 5} decyzji")  
             print(f"  Actor Loss: {avg_actor_loss:.4f}")
             print(f"  Critic Loss: {avg_critic_loss:.4f}")
             print(f"  Entropy: {avg_entropy:.4f}")
@@ -518,7 +542,7 @@ def train_rl_model():
         buffer.clear()
         
         # Checkpoint co 50 epok
-        if epoch % 10 == 0 and epoch > 0:
+        if epoch % 5 == 0 and epoch > 0:
             save_checkpoint(model, optimizer, epoch, f"models/RL_agent_epoch{epoch}.pth")
     
     # Finalny checkpoint
@@ -536,11 +560,11 @@ def train_rl_model():
     plt.xlabel('Numer wyścigu')
     plt.ylabel('Nagroda (znormalizowana)')
     plt.legend()
-    plt.grid(True, alpha=0.3)
+ #    plt.grid(True,#  alpha=0.3)
     plt.savefig('ai/rl_learning_plot/rl_reward_per_race.png', dpi=150)
-    plt.show()
+    plt.show()# 
 
-
+train_rl_model()
 
 # import torch
 # from torchview import draw_graph
@@ -550,17 +574,17 @@ def train_rl_model():
 # # 1. Konfiguracja modelu
 
 # action_space = spaces.MultiDiscrete([
-#                                                 2, # Pit stop or not
-#                                                 # 2, # Confirm pit stop or not
-#                                                 5, # Tire change (0-4) No, soft, medium, hard, wet
-#                                                 2, # Repair or not (0-1)
-#                                                 6, # Fuel * 0.2 (0-20)
-#                                                 ])
+#                                 2, # Pit stop or not
+#                                 # 2, # Confirm pit stop or not
+#                                 5, # Tire change (0-4) No,#  soft, medium, hard, wet
+#                                 2, # Repair or not (0-1)
+#                                 6, # Fuel#  * 0.2 (0-20)
+#                                     ])
 # model = ActorCritic(state_dim=26, action_space=action_space)
 
-# # 2. Przygotowanie danych (X oraz Stan)
+# # 2. Przygotowanie da# nych (X oraz # Stan)
 # dummy_x = torch.randn(1, 1, 26)
-# # Stan dla LSTM: (h_0, c_0) -> rozmiar [layers, batch, hidden]
+# # Stan dla#  LSTM: (h_0, c_# 0) -> rozmiar [layers, ba# tch, hidden]
 
 
 # # 3. Generowanie grafu

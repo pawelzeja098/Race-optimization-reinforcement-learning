@@ -21,7 +21,7 @@ from ai.RLmodel import ActorCritic
 from gymnasium import spaces
 
 if __name__ == "__main__":
-    #--------- COLLECT TELEMETRY DATA ---------
+    # --------- COLLECT TELEMETRY DATA ---------
     # usage_multiplier = 3.0  # Ustawienia wyścigu
     # collect_telemetry(usage_multiplier)
 
@@ -43,7 +43,7 @@ if __name__ == "__main__":
     # model = ActorCritic(state_dim, action_space) 
 
     
-    path = "models/RL_agent_final.pth"
+    path = "models/RL_agent1_final.pth"
     checkpoint = torch.load(path, map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
 
     try:
@@ -55,8 +55,8 @@ if __name__ == "__main__":
  
     model.eval()
 
-    scaler_minmax_X = joblib.load("models/scalerX_min_max_RL.pkl")
-    scaler_robust_X = joblib.load("models/scalerX_robust_RL.pkl")
+    scaler_minmax_X = joblib.load("models/scalerX_min_max_RL1.pkl")
+    scaler_robust_X = joblib.load("models/scalerX_robust_RL1.pkl")
 
     client = TelemetryClient()
     client.start()  # To uruchamia wątek odbierania (Wątek 1)

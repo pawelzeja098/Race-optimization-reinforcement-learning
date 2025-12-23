@@ -358,14 +358,16 @@ def train_model():
         avg_train_loss = total_train_loss / len(train_loader)
         scheduler.step(avg_train_loss)
         print(f"Epoch {epoch+1}/{num_epochs}, Train Loss: {avg_train_loss:.4f}")
-    torch.save(model.state_dict(), "models/lstmdeltaT_model.pth")
+    torch.save(model.state_dict(), "models/lstmdeltaT_model1.pth")
     import joblib
-    joblib.dump(scaler_X_min_max, "models/scalerX_min_max.pkl")
-    joblib.dump(scaler_X_robust, "models/scalerX_robust.pkl")
-    joblib.dump(scaler_Y_min_max, "models/scalerY_min_max.pkl")
-    joblib.dump(scaler_Y_robust, "models/scalerY_robust.pkl")
+    joblib.dump(scaler_X_min_max, "models/scalerX_min_max1.pkl")
+    joblib.dump(scaler_X_robust, "models/scalerX_robust1.pkl")
+    joblib.dump(scaler_Y_min_max, "models/scalerY_min_max1.pkl")
+    joblib.dump(scaler_Y_robust, "models/scalerY_robust1.pkl")
 
-    print("✅ Model saved to models/lstm_model.pth")
+    print("✅ Model saved to models/lstmdeltaT_model1.pth")
+
+# train_model()
 
 
 # import torch
