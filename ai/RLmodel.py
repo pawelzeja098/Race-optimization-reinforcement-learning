@@ -4,7 +4,7 @@ import sys
 import sqlite3
 import json
 sys.path.append(r'E:\Programowanie\Reinforcement-learning-race-simulation')
-
+import time
 import torch 
 import torch.nn as nn
 import torch.optim as optim
@@ -142,7 +142,7 @@ class RolloutBuffer:
 
 
 
-def ppo_update_batch(model, optimizer, buffer, batch_indices, device, clip_eps=0.2, entropy_coef=0.05, debug=False):
+def ppo_update_batch(model, optimizer, buffer, batch_indices, device, clip_eps=0.2, entropy_coef=0.03, debug=False):
     """
     ✅ CAŁKOWICIE PRZEPISANA FUNKCJA - naprawione wszystkie problemy
     """
@@ -234,7 +234,7 @@ def ppo_update_batch(model, optimizer, buffer, batch_indices, device, clip_eps=0
     critic_loss = F.mse_loss(values_new, returns_normalized)
     
     # ✅ 10. Total loss - ZWIĘKSZONA WAGA CRITIC (0.5→1.0)
-    loss = actor_loss + 1.0 * critic_loss - entropy_coef * entropy
+    loss = actor_loss + 0.5 * critic_loss - entropy_coef * entropy
     
     # ✅ 11. WAŻNE: Sprawdź, czy loss nie jest NaN
     if torch.isnan(loss):
@@ -377,45 +377,60 @@ def train_rl_model():
     all_total_rewards = []
     all_epoch_rewards = []  # Nagroda na epokę (suma wyścigów)
     all_race_rewards = []   # Nagroda na pojedynczy wyścig
-    num_epochs = 30  # ⚡ KOMPROMIS: 20 epok × 150 = 3000 wyścigów (~3-4h)
+    num_epochs = 20  # ⚡ FINALNY: 20 epok × 150 = 3000 wyścigów (~3-4h)
 
-    RACES_PER_EPOCH = 150  # 150 × 5 decyzji = ~750 sampli (wystarczające)
+    RACES_PER_EPOCH = 50  # 150 × 5 decyzji = ~750 sampli (solidne dane)
     PPO_EPOCHS = 10
     BATCH_SIZE = 64  # 64/750 = 8.5% buffera (OK)
+    
+    # ✅ ENTROPY SCHEDULE - BARDZO SILNA kara za losowość!
+    ENTROPY_START = 0.3   # Start: BARDZO silna kara (3x więcej niż 0.15!)
+    ENTROPY_END = 0.05    # Koniec: umiarkowana kara
 
 
     try:
-        scaler_minmax_X = joblib.load("models/scalerX_min_max_RL.pkl")
-        scaler_robust_X = joblib.load("models/scalerX_robust_RL.pkl")
+        scaler_minmax_X = joblib.load("models/scalerX_min_max_RL_final.pkl")
+        scaler_robust_X = joblib.load("models/scalerX_robust_RL_final.pkl")
     except:
         data = load_data_from_db()
         X = create_x(data)
         scaler_minmax_X, scaler_robust_X = create_scalers(X)
-        joblib.dump(scaler_minmax_X, "models/scalerX_min_max_RL.pkl")
-        joblib.dump(scaler_robust_X, "models/scalerX_robust_RL.pkl")
+        joblib.dump(scaler_minmax_X, "models/scalerX_min_max_RL_final.pkl")
+        joblib.dump(scaler_robust_X, "models/scalerX_robust_RL_final.pkl")
 
 
 
     for epoch in range(num_epochs):
+        # ✅ Oblicz bieżący entropy_coef (liniowy spadek)
+        progress = epoch / max(num_epochs - 1, 1)
+        current_entropy_coef = ENTROPY_START + (ENTROPY_END - ENTROPY_START) * progress
 
         epoch_total_reward = 0
         
-        for race_epoch in range(RACES_PER_EPOCH):
+        # ✅ TRENING TYLKO NA 32min WYŚCIGACH (1932s)
+        # Model będzie używany tylko w takich wyścigach
+        # Faza 1 (0-9): Tylko suche warunki (solidne podstawy)
+        # Faza 2 (10-19): Dodaj deszcz (50/50) - uczenie adaptacji
+        race_configs = []
+        
+        if epoch < 10:
+            # Faza 1: Długie wyścigi, usage 3.0, bez deszczu
+            race_configs = [(2, 1, 0)] * RACES_PER_EPOCH
+        else:
+            # Faza 2: Długie wyścigi, usage 3.0, losowy deszcz (50/50)
+            race_configs = [(2, 1, 0)] * (RACES_PER_EPOCH // 2) + [(2, 1, 1)] * (RACES_PER_EPOCH // 2)
+        
+        # Przetasuj konfiguracje (żeby nie były grupowane)
+        random.shuffle(race_configs)
+        
+        for race_epoch, (i_time, i_usage, i_rain) in enumerate(race_configs):
 
-            end_et = [734.0,1032.0,1932.0] # 11592.0
-            total_steps = [1653,2692,5007] # 30922
-            usage_multiplier = [1.0,3.0]
-            no_rain = [True,False]
-
-
-            i_time = random.choice([0,1,2])
-            i_usage = random.choice([0,1])
-            i_rain = random.choice([0,1])
-
-            # i_time = 2
-            # i_usage = 1
-            # i_rain = 1
+            end_et = [734.0, 1032.0, 1932.0]
+            total_steps = [1653, 2692, 5007]
+            usage_multiplier = [1.0, 3.0]
+            no_rain = [True, False]
             
+            # Zawsze średni wyścig (1032s), usage 3.0
             end_et = end_et[i_time]
             total_steps = total_steps[i_time]
             usage_mult = usage_multiplier[i_usage]
@@ -431,6 +446,7 @@ def train_rl_model():
             race_reward = 0
             
             while not done:
+                start = time.perf_counter()
                 
 
                 # Wybierz akcję na podstawie bieżącej obserwacji
@@ -440,6 +456,7 @@ def train_rl_model():
                 next_obs, reward, done, _ = env.step(actions)
 
                 # ✅ REWARD CLIPPING - ogranicza ekstremalne wartości
+                print(reward)
                 reward = np.clip(reward, -100, 100)  # Clip PRZED normalizacją
                 reward /= 100.0  # Teraz reward w [-1, 1]
 
@@ -468,7 +485,12 @@ def train_rl_model():
                 # Zaktualizuj stan na następną iterację
                 obs = next_obs
                 race_reward += reward
-                
+
+                end = time.perf_counter()
+                print(f"Czas wykonania okr: {end - start:.4f} sekund")
+                if end - start > 1.5:
+                    print(f"Koniec wysc {done}")
+                    
                 # --- POPRAWKA 3: Usunięto blok 'if done: reset()' ---
                 # Pętla 'while' sama się zakończy, a reset nastąpi
                 # na początku następnej epoki.
@@ -508,7 +530,8 @@ def train_rl_model():
                 debug_mode = (ppo_epoch == 5 and batch_idx == 0)
                 
                 actor_loss, critic_loss, entropy = ppo_update_batch(
-                    model, optimizer, buffer, batch_indices, device, debug=debug_mode
+                    model, optimizer, buffer, batch_indices, device, 
+                    entropy_coef=current_entropy_coef, debug=debug_mode
                 )
                 
                 total_actor_loss += actor_loss
@@ -536,14 +559,28 @@ def train_rl_model():
             print(f"  Actor Loss: {avg_actor_loss:.4f}")
             print(f"  Critic Loss: {avg_critic_loss:.4f}")
             print(f"  Entropy: {avg_entropy:.4f}")
+            print(f"  Entropy Coef: {current_entropy_coef:.4f} (↓ zmniejsza się)")
             print(f"{'='*60}")
+
+            #zapsi logi do pliku
+            with open("ai/rl_learning_plot/rl_training_log.txt", "a", encoding='utf-8') as log_file:
+                log_file.write(f"Epoch {epoch}/{num_epochs}\n")
+                log_file.write(f"  Epoch Total: {epoch_total_reward:.4f} (z {RACES_PER_EPOCH} wyscigow)\n")
+                log_file.write(f"  Avg per  race: {avg_race_reward:.4f}\n")
+                log_file.write(f"  Last 100 races avg: {recent_avg:.4f}\n")
+                log_file.write(f"  Buffer size: ~{RACES_PER_EPOCH * 5} decyzji\n")
+                log_file.write(f"  Actor Loss: {avg_actor_loss:.4f}\n")
+                log_file.write(f"  Critic Loss: {avg_critic_loss:.4f}\n")
+                log_file.write(f"  Entropy: {avg_entropy:.4f}\n")
+                log_file.write(f"  Entropy Coef: {current_entropy_coef:.4f} (zmniejsza sie)\n")
+                log_file.write(f"{'='*60}\n")
         
         # Wyczyść bufor
         buffer.clear()
         
-        # Checkpoint co 50 epok
+        # Checkpoint co 5 epok
         if epoch % 5 == 0 and epoch > 0:
-            save_checkpoint(model, optimizer, epoch, f"models/RL_agent_epoch{epoch}.pth")
+            save_checkpoint(model, optimizer, epoch, f"models/RL_agent_final_epoch{epoch}.pth")
     
     # Finalny checkpoint
     save_checkpoint(model, optimizer, num_epochs, "models/RL_agent_final.pth")
@@ -560,16 +597,16 @@ def train_rl_model():
     plt.xlabel('Numer wyścigu')
     plt.ylabel('Nagroda (znormalizowana)')
     plt.legend()
- #    plt.grid(True,#  alpha=0.3)
-    plt.savefig('ai/rl_learning_plot/rl_reward_per_race.png', dpi=150)
-    plt.show()# 
+    plt.grid(True, alpha=0.3)
+    plt.savefig('ai/rl_learning_plot/rl_reward_per_race_final.png', dpi=150)
+    plt.show()
 
 train_rl_model()
 
 # import torch
 # from torchview import draw_graph
 # import graphviz
-# from gymnasium import spaces
+# from gymnasium import spaces 
 
 # # 1. Konfiguracja modelu
 
@@ -634,70 +671,3 @@ train_rl_model()
 
 # print(dot.source)
 # print("Zapisano: ppo_simplified.png")
-
-
-
-
-
-# def ppo_update(model, optimizer, buffer, device, clip_eps=0.2):
-#     """
-#     Poprawiona funkcja PPO update.
-#     """
-    
-#     # --- 1. Konwersja danych z bufora na tensory GPU ---
-    
-#     states = torch.tensor(np.array(buffer.states), dtype=torch.float32).to(device)
-    
-#     # POPRAWKA BŁĘDU 2: Przekonwertuj listę tensorów akcji [tensor([0,1]), ...]
-#     # na jeden duży tensor (N_kroków, N_akcji) na GPU
-#     actions = torch.stack(buffer.actions).to(device) 
-    
-#     old_log_probs = torch.stack(buffer.log_probs).to(device)
-#     # values = torch.stack(buffer.values).squeeze().to(device)
-#     values = torch.stack(buffer.values).reshape(-1).to(device)
-    
-    
-#     # POPRAWKA BŁĘDU 3: Przekonwertuj listę tensorów nagród na listę float
-#     rewards_list = [r.item() for r in buffer.rewards]
-#     dones_list = buffer.dones
-
-#     # --- 2. Obliczenia na CPU (GAE) ---
-#     advantages, returns = compute_gae(rewards_list, values.tolist(), dones_list)
-#     advantages = torch.tensor(advantages, dtype=torch.float32).to(device)
-#     returns = torch.tensor(returns, dtype=torch.float32).to(device)
-
-#     # --- 3. Forward pass i obliczenie strat ---
-    
-#     # action_probs to lista [tensor_dist_pit, tensor_dist_opony]
-#     action_probs, values_new = model(states) 
-
-#     # Oblicz log_probs dla MultiDiscrete
-#     log_probs_new = []
-#     for i, probs in enumerate(action_probs):
-#         dist = torch.distributions.Categorical(probs)
-        
-#         # POPRAWKA BŁĘDU 1: Użyj "krojonego" tensora 'actions' z GPU
-#         # 'actions' ma kształt (N_kroków, N_akcji)
-#         # 'acts' będzie miało kształt (N_kroków,)
-#         acts = actions[:, i] 
-        
-#         # dist (GPU) i acts (GPU) są teraz na tym samym urządzeniu
-#         log_probs_new.append(dist.log_prob(acts))
-        
-#     log_probs_new = torch.stack(log_probs_new).sum(dim=0)
-
-#     # PPO ratio
-#     ratio = torch.exp(log_probs_new - old_log_probs.detach())
-#     surr1 = ratio * advantages
-#     surr2 = torch.clamp(ratio, 1-clip_eps, 1+clip_eps) * advantages
-
-#     actor_loss = -torch.min(surr1, surr2).mean()
-#     critic_loss = F.mse_loss(values_new.squeeze(), returns)
-#     loss = actor_loss + 0.5 * critic_loss
-
-#     optimizer.zero_grad()
-#     loss.backward()
-#     optimizer.step()
-    
-#     # Zwróć straty do logowania
-#     return actor_loss.item(), critic_loss.item()

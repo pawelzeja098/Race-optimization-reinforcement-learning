@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 import json
+import time
 
 matplotlib.use('TkAgg')
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -401,10 +402,14 @@ class RacingEnv(gym.Env):
         is_wet_track = self.path_wetness > 0.1
         tire_type = self.tire_compound_index  # 0=soft, 1=med, 2=hard, 3=wet
         
-        if is_wet_track and tire_type != 3:  # Slicki w deszczu
-            reward -= 50  # Duża kara - niebezpieczne!
+        # Progresywna kara: im mokrzej, tym większa kara za slicki
+        if tire_type != 3 and self.path_wetness > 0.1:  # Slicki na mokrym
+            # OSŁABIONE: 0.3→-20, 0.5→-31, 0.8→-48, 1.0→-59 (było 40-117)
+            wetness_penalty = 20 + (self.path_wetness - 0.3) * 55
+            reward -= wetness_penalty
+            
         elif not is_raining and tire_type == 3 and self.path_wetness < 0.1:  # Wet na suchym
-            reward -= 30  # Średnia kara - marnowanie tempa
+            reward -= 15  # OSŁABIONE 30→15
         # elif is_wet_track and tire_type in [0, 1, 2]:  # Suche opony na mokrym torze (bez deszczu)
         #     reward -= 40  # Kara za slicki na mokrym - wolniejsze, ryzykowne
         
@@ -412,33 +417,33 @@ class RacingEnv(gym.Env):
         if hasattr(self, 'just_pitted') and self.just_pitted:
             race_duration = self.end_et  # Długość wyścigu w sekundach
             
-            # Krótkie wyścigi (<30 min): Twarde/średnie to STRATA
-            if race_duration < 2000:  # 30 minut
+            # Wyścigi ≤35 min (1932s): Twarde/średnie to STRATA
+            if race_duration <= 2200:  # 36 minut - 1932s mieści się!
                 if tire_type == 2:  # Hard - nie zużyjesz ich!
-                    reward -= 35
-                elif tire_type == 1:  # Medium - za konserwatywne
-                    reward -= 35
-                elif tire_type == 0:  # Soft - IDEALNE dla krótkich
-                    reward += 20
+                    reward -= 12  # OSŁABIONE 25→12
+                elif tire_type == 1:  # Medium - za konserwatywne  
+                    reward -= 10  # OSŁABIONE 20→10
+                elif tire_type == 0:  # Soft - IDEALNE dla takich wyścigów
+                    reward += 10  # OSŁABIONE 15→10
             
             # Długie wyścigi (>1h): Miękkie to STRATA (zbyt częste pit-stopy)
             elif race_duration > 3600:  # 1 godzina
                 if tire_type == 0:  # Soft - za częste pit-stopy
-                    reward -= 25
+                    reward -= 15
                 elif tire_type == 2:  # Hard - IDEALNE dla długich
-                    reward += 20
-                elif tire_type == 1:  # Medium - dobry kompromis
                     reward += 10
+                elif tire_type == 1:  # Medium - dobry kompromis
+                    reward += 5
         
         # === KARY ZA ZŁE DECYZJE PALIWOWE ===
         if hasattr(self, 'just_pitted') and self.just_pitted:
             # Kara za przedwczesny pit-stop (za dużo paliwa)
             if self.fuel_before_pit > 0.5:  # Więcej niż 50% paliwa
-                reward -= 30  # Kara za marnowanie czasu - niepotrzebny pit
+                reward -= 8  # OSŁABIONE 15→8
             
             # Kara za bezsensowne dolanie (target < current)
             if self.target_fuel < self.fuel_before_pit:
-                reward -= 40  # Duża kara - absurdalna decyzja
+                reward -= 10  # OSŁABIONE 20→10
             
         
        
@@ -447,7 +452,7 @@ class RacingEnv(gym.Env):
         if hasattr(self, 'just_repaired') and self.just_repaired:
             total_damage = sum(self.dent_severity)
             if total_damage <= 1:  # Prawie brak uszkodzeń
-                reward -= 15  # Kara za marnowanie czasu w pit
+                reward -= 15  # OSŁABIONE 30→15
         
         
         return reward
@@ -465,6 +470,7 @@ class RacingEnv(gym.Env):
         self.current_angle_radians = 0.0
         reward = 0.0
         while True:
+            start_step = time.perf_counter()
             # reward = 0.0
             if self.fuel_tank_capacity <= 0.05:
                 done = True
@@ -557,7 +563,7 @@ class RacingEnv(gym.Env):
            
 
 
-            #Check current sector
+            # Check current sector
             prev_sector = self.sector
             for sec, (start, end) in sectors.items():
                 if start <= data_lstm[0] <= end:
@@ -834,6 +840,9 @@ class RacingEnv(gym.Env):
             self.history.append(self.state)
 
             self.prev_et = data_lstm[1] * self.end_et
+
+            end_step = time.perf_counter()
+            # print(f"Czas wykonania step: {end_step - start_step:.4f} sekund")
 
           
 

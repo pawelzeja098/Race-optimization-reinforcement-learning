@@ -8,10 +8,27 @@ from torch.distributions import Categorical
 import torch
 from datetime import datetime
 import os
+import tempfile
+import shutil
 
 
 def run_rl_agent(client, model, scaler_X_min_max, scaler_X_robust, usage_multiplier=3.0, save_dir="telemetry_logs"):
     print("Start wątku RL - tryb: Scoring -> Next Telem")
+
+    # Funkcja atomowego zapisu (zapobiega uszkodzeniom przy Ctrl+C)
+    def atomic_save(data, filepath):
+        """Zapisuje JSON do tymczasowego pliku, potem rename (atomic)"""
+        temp_fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(filepath), suffix='.json.tmp')
+        try:
+            with os.fdopen(temp_fd, 'w') as f:
+                json.dump(data, f, indent=2)
+            # Atomic rename (nadpisuje stary plik)
+            shutil.move(temp_path, filepath)
+        except Exception as e:
+            # Cleanup temp file on error
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            raise e
 
     # Zmienna-magazyn: tu trzymamy Scoring, który czeka na swoją parę (Telemetrię)
     pending_scoring = None
@@ -59,19 +76,67 @@ def run_rl_agent(client, model, scaler_X_min_max, scaler_X_robust, usage_multipl
                     continue
                 
                 # ========================================
-                # LOGOWANIE: Zapisz CO DRUGI scoring
+                # LOGOWANIE: Czekaj na parę scoring+telemetry (jak w LMU_plugin)
                 # ========================================
                 scoring_counter += 1
                 if scoring_counter % 2 == 0:  # Co drugi scoring
-                    last_scoring = data.copy()
-                    last_scoring["mVehicles"] = [player]  # Tylko gracz, nie wszystkie pojazdy
-                    record_counter += 1
-                    scoring_record = {
-                        "record_id": record_counter,
-                        "timestamp": datetime.now().isoformat(),
-                        "data": last_scoring
-                    }
-                    scoring_log.append(scoring_record)
+                    # Zapisz scoring tymczasowo
+                    temp_scoring = data.copy()
+                    temp_scoring["mVehicles"] = [player]
+                    
+                    # Wyczyść kolejkę ze starych telemetrii (jak w LMU_plugin)
+                    while True:
+                        try:
+                            client.queue.get_nowait()
+                        except Empty:
+                            break
+                    
+                    # Czekaj na NOWĄ telemetrię (max 10 prób)
+                    found_telem = None
+                    for _ in range(10):
+                        try:
+                            msg = client.queue.get(timeout=0.1)
+                            if msg.get("Type") == "TelemInfoV01":
+                                found_telem = msg
+                                break
+                        except Empty:
+                            pass
+                        time.sleep(0.05)
+                    
+                    # Zapisz PARĘ (jak w LMU_plugin) - tylko jeśli mamy telemetrię
+                    if found_telem:
+                        record_counter += 1
+                        
+                        scoring_record = {
+                            "record_id": record_counter,
+                            "timestamp": datetime.now().isoformat(),
+                            "data": temp_scoring
+                        }
+                        telemetry_record = {
+                            "record_id": record_counter,
+                            "timestamp": datetime.now().isoformat(),
+                            "data": found_telem
+                        }
+                        
+                        scoring_log.append(scoring_record)
+                        telemetry_log.append(telemetry_record)
+                        
+                        # Auto-zapis co 20 par
+                        if record_counter % 20 == 0:
+                            try:
+                                atomic_save(scoring_log, scoring_file)
+                                atomic_save(telemetry_log, telemetry_file)
+                            except Exception as e:
+                                print(f"⚠️ Błąd zapisu: {e}")
+                        
+                        if record_counter % 100 == 0:
+                            print(f"💾 [{record_counter}] Auto-zapis: {len(scoring_log)} par")
+                        
+                        # ========================================
+                        # NIE MA JUŻ OBLICZEŃ RL TUTAJ - przeniesione do triggera sektora
+                        # ========================================
+                    else:
+                        print(f"⚠️ Brak telemetrii dla scoringu #{scoring_counter}")
                 # ========================================
                 
                 curr_sector = player["mSector"]
@@ -97,28 +162,9 @@ def run_rl_agent(client, model, scaler_X_min_max, scaler_X_robust, usage_multipl
 
             # --- 2. Przyszło TELEM ---
             elif msg_type == "TelemInfoV01":
-                
                 # ========================================
-                # LOGOWANIE: Zapisz TYLKO PIERWSZĄ telemetry po każdym scoringu
-                # ========================================
-                if last_scoring is not None:
-                    telemetry_record = {
-                        "record_id": record_counter,  # Ten sam co scoring
-                        "timestamp": datetime.now().isoformat(),
-                        "data": data
-                    }
-                    telemetry_log.append(telemetry_record)
-                    last_scoring = None  # Reset - następne telemetrie do nowego scoringu
-                    
-                    # Auto-zapis co 20 par
-                    if record_counter % 20 == 0:
-                        with open(scoring_file, 'w') as f:
-                            json.dump(scoring_log, f, indent=2)
-                        with open(telemetry_file, 'w') as f:
-                            json.dump(telemetry_log, f, indent=2)
-                    
-                    if record_counter % 100 == 0:
-                        print(f"💾 [{record_counter}] Auto-zapis: {len(scoring_log)} par")
+                # Telemetria jest już obsługiwana w bloku SCORING (aktywne czekanie)
+                # Ten blok służy tylko do TRIGGER pit-stop decision (sektor 0)
                 # ========================================
                 
                 # Czy mamy oczekujący Scoring? (Czy "zapadka" jest ustawiona?)
@@ -185,18 +231,19 @@ def run_rl_agent(client, model, scaler_X_min_max, scaler_X_robust, usage_multipl
     
     finally:
         # ========================================
-        # ZAPIS KOŃCOWY - wykonuje się ZAWSZE
+        # ZAPIS KOŃCOWY - wykonuje się ZAWSZE (atomic write)
         # ========================================
         print(f"\n{'='*60}")
         print(f"🏁 Koniec sesji - zapisuję dane końcowe...")
         if scoring_log or telemetry_log:
-            with open(scoring_file, 'w') as f:
-                json.dump(scoring_log, f, indent=2)
-            with open(telemetry_file, 'w') as f:
-                json.dump(telemetry_log, f, indent=2)
-            print(f"✅ Zapisano:")
-            print(f"   Scoring:    {len(scoring_log)} rekordów -> {scoring_file}")
-            print(f"   Telemetry:  {len(telemetry_log)} rekordów -> {telemetry_file}")
+            try:
+                atomic_save(scoring_log, scoring_file)
+                atomic_save(telemetry_log, telemetry_file)
+                print(f"✅ Zapisano:")
+                print(f"   Scoring:    {len(scoring_log)} rekordów -> {scoring_file}")
+                print(f"   Telemetry:  {len(telemetry_log)} rekordów -> {telemetry_file}")
+            except Exception as e:
+                print(f"❌ Błąd zapisu końcowego: {e}")
         else:
             print("⚠️ Brak rekordów do zapisania")
         print(f"{'='*60}\n")
@@ -332,8 +379,8 @@ def select_action_deterministic(model, state):
 
 def action_to_string(actions):
     """Zwraca zwięzły string z akcją"""
-    if actions[0] == 0:
-        return "Brak pit-stopu"
+    # if actions[0] == 0:
+    #     return "Brak pit-stopu"
     pit = "Zjedź na pit-stop" if actions[0] == 1 else "Nie zjeżdżaj"
     tire_names = ["Bez zmiany", "Miękkie", "Średnie", "Twarde", "Deszczowe"]
     repair = "Naprawa" if actions[2] == 1 else "Brak naprawy"
