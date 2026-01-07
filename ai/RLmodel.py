@@ -96,7 +96,7 @@ def select_action(model, state):
 
     return actions, log_probs, state_value
 
-def compute_gae(rewards, values, dones, gamma=0.995, lam=0.95):
+def compute_gae(rewards, values, dones, gamma=0.99, lam=0.95):
     """
     Compute Generalized Advantage Estimation (GAE)
     See how good was action compared to average (value)
@@ -222,11 +222,11 @@ def ppo_update_batch(model, optimizer, buffer, batch_indices, device, clip_eps=0
     surr2 = torch.clamp(ratio, 1 - clip_eps, 1 + clip_eps) * advantages
     
     # 🔍 DIAGNOSTYKA - wypisz gdy debug=True
-    if debug:
-        print(f"\n🔍 DEBUG PPO:")
-        print(f"  Ratio: min={ratio.min().item():.3f}, max={ratio.max().item():.3f}, mean={ratio.mean().item():.3f}")
-        print(f"  Advantages: min={advantages.min().item():.3f}, max={advantages.max().item():.3f}, mean={advantages.mean().item():.3f}")
-        print(f"  Surr1 mean: {surr1.mean().item():.4f}, Surr2 mean: {surr2.mean().item():.4f}")
+    # if debug:
+    #     print(f"\n🔍 DEBUG PPO:")
+    #     print(f"  Ratio: min={ratio.min().item():.3f}, max={ratio.max().item():.3f}, mean={ratio.mean().item():.3f}")
+    #     print(f"  Advantages: min={advantages.min().item():.3f}, max={advantages.max().item():.3f}, mean={advantages.mean().item():.3f}")
+    #     print(f"  Surr1 mean: {surr1.mean().item():.4f}, Surr2 mean: {surr2.mean().item():.4f}")
     
     actor_loss = -torch.min(surr1, surr2).mean()
     
@@ -372,31 +372,31 @@ def train_rl_model():
     env = RacingEnv()
     state_dim = env.observation_space.shape[0]
     model = ActorCritic(state_dim, env.action_space).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=2e-4)  # Kompromis: 1e-4 za niskie, 3e-4 za wysokie
     buffer = RolloutBuffer()
     all_total_rewards = []
     all_epoch_rewards = []  # Nagroda na epokę (suma wyścigów)
     all_race_rewards = []   # Nagroda na pojedynczy wyścig
-    num_epochs = 20  # ⚡ FINALNY: 20 epok × 150 = 3000 wyścigów (~3-4h)
+    num_epochs = 20  # ⚡ FINALNY: 20 epok × 300 = 6000 wyścigów
 
-    RACES_PER_EPOCH = 50  # 150 × 5 decyzji = ~750 sampli (solidne dane)
+    RACES_PER_EPOCH = 300  # 300 × 5 decyzji = ~1500 sampli (większy buffer)
     PPO_EPOCHS = 10
-    BATCH_SIZE = 64  # 64/750 = 8.5% buffera (OK)
+    BATCH_SIZE = 32  # 64/750 = 8.5% buffera (OK)
     
     # ✅ ENTROPY SCHEDULE - BARDZO SILNA kara za losowość!
-    ENTROPY_START = 0.3   # Start: BARDZO silna kara (3x więcej niż 0.15!)
-    ENTROPY_END = 0.05    # Koniec: umiarkowana kara
+    ENTROPY_START = 0.01   # Start: BARDZO silna kara (3x więcej niż 0.15!)
+    ENTROPY_END = 0.001    # Koniec: umiarkowana kara
 
 
     try:
-        scaler_minmax_X = joblib.load("models/scalerX_min_max_RL_final.pkl")
-        scaler_robust_X = joblib.load("models/scalerX_robust_RL_final.pkl")
+        scaler_minmax_X = joblib.load("models/scalerX_min_max_RL_final1.pkl")
+        scaler_robust_X = joblib.load("models/scalerX_robust_RL_final1.pkl")
     except:
         data = load_data_from_db()
         X = create_x(data)
         scaler_minmax_X, scaler_robust_X = create_scalers(X)
-        joblib.dump(scaler_minmax_X, "models/scalerX_min_max_RL_final.pkl")
-        joblib.dump(scaler_robust_X, "models/scalerX_robust_RL_final.pkl")
+        joblib.dump(scaler_minmax_X, "models/scalerX_min_max_RL_final1.pkl")
+        joblib.dump(scaler_robust_X, "models/scalerX_robust_RL_final1.pkl")
 
 
 
@@ -415,7 +415,7 @@ def train_rl_model():
         
         if epoch < 10:
             # Faza 1: Długie wyścigi, usage 3.0, bez deszczu
-            race_configs = [(2, 1, 0)] * RACES_PER_EPOCH
+            race_configs = [(2, 1, 1)] * RACES_PER_EPOCH
         else:
             # Faza 2: Długie wyścigi, usage 3.0, losowy deszcz (50/50)
             race_configs = [(2, 1, 0)] * (RACES_PER_EPOCH // 2) + [(2, 1, 1)] * (RACES_PER_EPOCH // 2)
@@ -446,7 +446,7 @@ def train_rl_model():
             race_reward = 0
             
             while not done:
-                start = time.perf_counter()
+                # start = time.perf_counter()
                 
 
                 # Wybierz akcję na podstawie bieżącej obserwacji
@@ -455,10 +455,9 @@ def train_rl_model():
                 # Wykonaj akcję. 
                 next_obs, reward, done, _ = env.step(actions)
 
-                # ✅ REWARD CLIPPING - ogranicza ekstremalne wartości
-                print(reward)
-                reward = np.clip(reward, -100, 100)  # Clip PRZED normalizacją
-                reward /= 100.0  # Teraz reward w [-1, 1]
+                # ✅ REWARD SCALING - silniejszy signal dla uczenia
+                # print(reward)
+                reward /= 100.0  # Zmienione z /1000 na /100 dla silniejszego signalu
 
                 next_obs = scale_single_input(next_obs, scaler_minmax_X, scaler_robust_X)
 
@@ -486,10 +485,10 @@ def train_rl_model():
                 obs = next_obs
                 race_reward += reward
 
-                end = time.perf_counter()
-                print(f"Czas wykonania okr: {end - start:.4f} sekund")
-                if end - start > 1.5:
-                    print(f"Koniec wysc {done}")
+                # end = time.perf_counter()
+                # print(f"Czas wykonania okr: {end - start:.4f} sekund")
+                # if end - start > 1.5:
+                #     print(f"Koniec wysc {done}")
                     
                 # --- POPRAWKA 3: Usunięto blok 'if done: reset()' ---
                 # Pętla 'while' sama się zakończy, a reset nastąpi
@@ -580,10 +579,10 @@ def train_rl_model():
         
         # Checkpoint co 5 epok
         if epoch % 5 == 0 and epoch > 0:
-            save_checkpoint(model, optimizer, epoch, f"models/RL_agent_final_epoch{epoch}.pth")
+            save_checkpoint(model, optimizer, epoch, f"models/RL_agent_final_epoch1{epoch}.pth")
     
     # Finalny checkpoint
-    save_checkpoint(model, optimizer, num_epochs, "models/RL_agent_final.pth")
+    save_checkpoint(model, optimizer, num_epochs, "models/RL_agent_final1.pth")
     
     # ✅ Wykres POJEDYNCZYCH WYŚCIGÓW (prawdziwy postęp)
     plt.figure(figsize=(14, 6))

@@ -26,7 +26,7 @@ if __name__ == "__main__":
     # usage_multiplier = 3.0  # Ustawienia wyścigu
     # collect_telemetry(usage_multiplier)
 
-    #---------- USE RL AGENT TO MAKE DECISIONS ----------
+    # ---------- USE RL AGENT TO MAKE DECISIONS ----------
     # action_space = spaces.MultiDiscrete([
     #                                     2, # Pit stop or not
     #                                     5, # Tire change (0-4) No, soft, medium, hard, wet
@@ -76,7 +76,7 @@ if __name__ == "__main__":
     # except KeyboardInterrupt:
     #     print("Zamykanie...")
     #     client.stop()
-    #     # Wątki daemon same zginą po zamknięciu głównego
+        # Wątki daemon same zginą po zamknięciu głównego
     
 
     #--------- FILTER JSON FILES FROM RAW TRAIN RACES ---------

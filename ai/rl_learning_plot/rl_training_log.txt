@@ -1,71 +1,4 @@
-Epoch 0/20
-  Epoch Total: 476.7970 (z 150 wyœcigów)
-  Avg per  race: 3.1786
-  Last 100 races avg: 3.2258
-  Buffer size: ~750 decyzji
-  Actor Loss: -0.0459
-  Critic Loss: 0.7129
-  Entropy: 4.0284
-Epoch 0/20
-  Epoch Total: 466.8070 (z 150 wyscigow)
-  Avg per  race: 3.1120
-  Last 100 races avg: 3.1444
-  Buffer size: ~750 decyzji
-  Actor Loss: -0.0496
-  Critic Loss: 0.6357
-  Entropy: 3.8367
-  Entropy Coef: 0.0300 (zmniejsza sie)
-============================================================
-Epoch 1/20
-  Epoch Total: 494.4790 (z 150 wyscigow)
-  Avg per  race: 3.2965
-  Last 100 races avg: 3.4929
-  Buffer size: ~750 decyzji
-  Actor Loss: -0.0530
-  Critic Loss: 0.5654
-  Entropy: 3.8909
-  Entropy Coef: 0.0287 (zmniejsza sie)
-============================================================
-Epoch 2/20
-  Epoch Total: 483.1290 (z 150 wyscigow)
-  Avg per  race: 3.2209
-  Last 100 races avg: 3.1240
-  Buffer size: ~750 decyzji
-  Actor Loss: -0.0579
-  Critic Loss: 0.5096
-  Entropy: 3.9503
-  Entropy Coef: 0.0274 (zmniejsza sie)
-============================================================
-Epoch 3/20
-  Epoch Total: 468.7480 (z 150 wyscigow)
-  Avg per  race: 3.1250
-  Last 100 races avg: 3.1609
-  Buffer size: ~750 decyzji
-  Actor Loss: -0.0546
-  Critic Loss: 0.4400
-  Entropy: 3.9584
-  Entropy Coef: 0.0261 (zmniejsza sie)
-============================================================
-Epoch 4/20
-  Epoch Total: 471.7630 (z 150 wyscigow)
-  Avg per  race: 3.1451
-  Last 100 races avg: 3.1027
-  Buffer size: ~750 decyzji
-  Actor Loss: -0.0593
-  Critic Loss: 0.4985
-  Entropy: 3.9034
-  Entropy Coef: 0.0247 (zmniejsza sie)
-============================================================
-Epoch 5/20
-  Epoch Total: 496.5530 (z 150 wyscigow)
-  Avg per  race: 3.3104
-  Last 100 races avg: 3.3793
-  Buffer size: ~750 decyzji
-  Actor Loss: -0.0677
-  Critic Loss: 0.4499
-  Entropy: 3.8966
-  Entropy Coef: 0.0234 (zmniejsza sie)
-============================================================
+
 Epoch 0/20
   Epoch Total: 533.1000 (z 150 wyscigow)
   Avg per  race: 3.5540
@@ -465,364 +398,203 @@ Epoch 19/20
   Critic Loss: 0.6436
   Entropy: 3.8829
   Entropy Coef: 0.0050 (zmniejsza sie)
-============================================================
+  
 Epoch 0/20
-  Epoch Total: 559.5000 (z 150 wyscigow)
-  Avg per  race: 3.7300
-  Last 100 races avg: 3.6000
+  Epoch Total: 193.6877 (z 150 wyscigow)
+  Avg per  race: 1.2913
+  Last 100 races avg: 1.3654
   Buffer size: ~750 decyzji
-  Actor Loss: -0.0421
-  Critic Loss: 0.6244
-  Entropy: 4.2063
-  Entropy Coef: 0.0200 (zmniejsza sie)
+  Actor Loss: -0.0362
+  Critic Loss: 0.8062
+  Entropy: 4.1146
+  Entropy Coef: 0.0100 (zmniejsza sie)
 ============================================================
 Epoch 1/20
-  Epoch Total: 534.9000 (z 150 wyscigow)
-  Avg per  race: 3.5660
-  Last 100 races avg: 3.4490
+  Epoch Total: 168.0568 (z 150 wyscigow)
+  Avg per  race: 1.1204
+  Last 100 races avg: 1.2244
   Buffer size: ~750 decyzji
-  Actor Loss: -0.0404
-  Critic Loss: 0.6498
-  Entropy: 4.2092
-  Entropy Coef: 0.0191 (zmniejsza sie)
+  Actor Loss: -0.0417
+  Critic Loss: 0.7582
+  Entropy: 4.1102
+  Entropy Coef: 0.0095 (zmniejsza sie)
 ============================================================
 Epoch 2/20
-  Epoch Total: 581.8000 (z 150 wyscigow)
-  Avg per  race: 3.8787
-  Last 100 races avg: 3.9560
+  Epoch Total: 207.2426 (z 150 wyscigow)
+  Avg per  race: 1.3816
+  Last 100 races avg: 1.5909
   Buffer size: ~750 decyzji
-  Actor Loss: -0.0516
-  Critic Loss: 0.5730
-  Entropy: 4.1797
-  Entropy Coef: 0.0182 (zmniejsza sie)
+  Actor Loss: -0.0409
+  Critic Loss: 0.6830
+  Entropy: 4.1230
+  Entropy Coef: 0.0091 (zmniejsza sie)
 ============================================================
 Epoch 3/20
-  Epoch Total: 615.7000 (z 150 wyscigow)
-  Avg per  race: 4.1047
-  Last 100 races avg: 4.1620
+  Epoch Total: 202.9042 (z 150 wyscigow)
+  Avg per  race: 1.3527
+  Last 100 races avg: 1.4057
   Buffer size: ~750 decyzji
-  Actor Loss: -0.0465
-  Critic Loss: 0.5971
-  Entropy: 4.1660
-  Entropy Coef: 0.0173 (zmniejsza sie)
+  Actor Loss: -0.0430
+  Critic Loss: 0.7646
+  Entropy: 4.0609
+  Entropy Coef: 0.0086 (zmniejsza sie)
 ============================================================
 Epoch 4/20
-  Epoch Total: 544.8000 (z 150 wyscigow)
-  Avg per  race: 3.6320
-  Last 100 races avg: 3.7080
+  Epoch Total: 180.4872 (z 150 wyscigow)
+  Avg per  race: 1.2032
+  Last 100 races avg: 1.2652
   Buffer size: ~750 decyzji
-  Actor Loss: -0.0379
-  Critic Loss: 0.6032
-  Entropy: 4.1643
-  Entropy Coef: 0.0164 (zmniejsza sie)
+  Actor Loss: -0.0509
+  Critic Loss: 0.7421
+  Entropy: 4.0323
+  Entropy Coef: 0.0081 (zmniejsza sie)
 ============================================================
 Epoch 5/20
-  Epoch Total: 623.9000 (z 150 wyscigow)
-  Avg per  race: 4.1593
-  Last 100 races avg: 4.1470
+  Epoch Total: 187.5213 (z 150 wyscigow)
+  Avg per  race: 1.2501
+  Last 100 races avg: 1.2433
   Buffer size: ~750 decyzji
-  Actor Loss: -0.0467
-  Critic Loss: 0.5603
-  Entropy: 4.1414
-  Entropy Coef: 0.0155 (zmniejsza sie)
+  Actor Loss: -0.0423
+  Critic Loss: 0.7116
+  Entropy: 4.0204
+  Entropy Coef: 0.0076 (zmniejsza sie)
 ============================================================
 Epoch 6/20
-  Epoch Total: 649.2000 (z 150 wyscigow)
-  Avg per  race: 4.3280
-  Last 100 races avg: 4.4630
+  Epoch Total: 212.3505 (z 150 wyscigow)
+  Avg per  race: 1.4157
+  Last 100 races avg: 1.3049
   Buffer size: ~750 decyzji
-  Actor Loss: -0.0464
-  Critic Loss: 0.5774
-  Entropy: 4.1017
-  Entropy Coef: 0.0146 (zmniejsza sie)
+  Actor Loss: -0.0435
+  Critic Loss: 0.7657
+  Entropy: 3.9813
+  Entropy Coef: 0.0072 (zmniejsza sie)
 ============================================================
 Epoch 7/20
-  Epoch Total: 618.7000 (z 150 wyscigow)
-  Avg per  race: 4.1247
-  Last 100 races avg: 3.9880
+  Epoch Total: 205.9308 (z 150 wyscigow)
+  Avg per  race: 1.3729
+  Last 100 races avg: 1.4000
   Buffer size: ~750 decyzji
-  Actor Loss: -0.0491
-  Critic Loss: 0.5866
-  Entropy: 4.0715
-  Entropy Coef: 0.0137 (zmniejsza sie)
-============================================================
-Epoch 0/20
-  Epoch Total: 519.9000 (z 150 wyscigow)
-  Avg per  race: 3.4660
-  Last 100 races avg: 3.3990
-  Buffer size: ~750 decyzji
-  Actor Loss: -0.0319
-  Critic Loss: 0.6589
-  Entropy: 3.7182
-  Entropy Coef: 0.0500 (zmniejsza sie)
-============================================================
-Epoch 1/20
-  Epoch Total: 523.7000 (z 150 wyscigow)
-  Avg per  race: 3.4913
-  Last 100 races avg: 3.3430
-  Buffer size: ~750 decyzji
-  Actor Loss: -0.0403
-  Critic Loss: 0.6031
-  Entropy: 3.7901
-  Entropy Coef: 0.0479 (zmniejsza sie)
-============================================================
-Epoch 2/20
-  Epoch Total: 520.7000 (z 150 wyscigow)
-  Avg per  race: 3.4713
-  Last 100 races avg: 3.4200
-  Buffer size: ~750 decyzji
-  Actor Loss: -0.0343
-  Critic Loss: 0.5877
-  Entropy: 3.8751
-  Entropy Coef: 0.0458 (zmniejsza sie)
-============================================================
-Epoch 3/20
-  Epoch Total: 527.7000 (z 150 wyscigow)
-  Avg per  race: 3.5180
-  Last 100 races avg: 3.4420
-  Buffer size: ~750 decyzji
-  Actor Loss: -0.0449
-  Critic Loss: 0.6047
-  Entropy: 3.9101
-  Entropy Coef: 0.0437 (zmniejsza sie)
-============================================================
-Epoch 4/20
-  Epoch Total: 552.7000 (z 150 wyscigow)
-  Avg per  race: 3.6847
-  Last 100 races avg: 3.5800
-  Buffer size: ~750 decyzji
-  Actor Loss: -0.0361
-  Critic Loss: 0.6471
-  Entropy: 3.9346
-  Entropy Coef: 0.0416 (zmniejsza sie)
-============================================================
-Epoch 5/20
-  Epoch Total: 594.6000 (z 150 wyscigow)
-  Avg per  race: 3.9640
-  Last 100 races avg: 3.8700
-  Buffer size: ~750 decyzji
-  Actor Loss: -0.0493
-  Critic Loss: 0.5554
-  Entropy: 3.9407
-  Entropy Coef: 0.0395 (zmniejsza sie)
-============================================================
-Epoch 0/20
-  Epoch Total: -132.0000 (z 150 wyscigow)
-  Avg per  race: -0.8800
-  Last 100 races avg: -0.9000
-  Buffer size: ~750 decyzji
-  Actor Loss: -0.0165
-  Critic Loss: 0.8576
-  Entropy: 4.1573
-  Entropy Coef: 0.1500 (zmniejsza sie)
-============================================================
-Epoch 1/20
-  Epoch Total: -134.0000 (z 150 wyscigow)
-  Avg per  race: -0.8933
-  Last 100 races avg: -0.8800
-  Buffer size: ~750 decyzji
-  Actor Loss: -0.0284
-  Critic Loss: 0.9076
-  Entropy: 4.3045
-  Entropy Coef: 0.1437 (zmniejsza sie)
-============================================================
-Epoch 2/20
-  Epoch Total: -136.0000 (z 150 wyscigow)
-  Avg per  race: -0.9067
-  Last 100 races avg: -0.9000
-  Buffer size: ~750 decyzji
-  Actor Loss: -0.0190
-  Critic Loss: 0.8739
-  Entropy: 4.4075
-  Entropy Coef: 0.1374 (zmniejsza sie)
-============================================================
-Epoch 3/20
-  Epoch Total: -136.0000 (z 150 wyscigow)
-  Avg per  race: -0.9067
-  Last 100 races avg: -0.8800
-  Buffer size: ~750 decyzji
-  Actor Loss: -0.0313
-  Critic Loss: 0.8250
-  Entropy: 4.4947
-  Entropy Coef: 0.1311 (zmniejsza sie)
-============================================================
-Epoch 4/20
-  Epoch Total: -132.0000 (z 150 wyscigow)
-  Avg per  race: -0.8800
-  Last 100 races avg: -0.8600
-  Buffer size: ~750 decyzji
-  Actor Loss: -0.0412
-  Critic Loss: 0.8660
-  Entropy: 4.5198
-  Entropy Coef: 0.1247 (zmniejsza sie)
-============================================================
-Epoch 5/20
-  Epoch Total: -126.0000 (z 150 wyscigow)
-  Avg per  race: -0.8400
-  Last 100 races avg: -0.8400
-  Buffer size: ~750 decyzji
-  Actor Loss: -0.0326
-  Critic Loss: 0.8165
-  Entropy: 4.5574
-  Entropy Coef: 0.1184 (zmniejsza sie)
-============================================================
-Epoch 6/20
-  Epoch Total: -136.0000 (z 150 wyscigow)
-  Avg per  race: -0.9067
-  Last 100 races avg: -0.8800
-  Buffer size: ~750 decyzji
-  Actor Loss: -0.0233
-  Critic Loss: 0.8065
-  Entropy: 4.5982
-  Entropy Coef: 0.1121 (zmniejsza sie)
-============================================================
-Epoch 7/20
-  Epoch Total: -130.0000 (z 150 wyscigow)
-  Avg per  race: -0.8667
-  Last 100 races avg: -0.8600
-  Buffer size: ~750 decyzji
-  Actor Loss: -0.0341
-  Critic Loss: 0.8126
-  Entropy: 4.6156
-  Entropy Coef: 0.1058 (zmniejsza sie)
+  Actor Loss: -0.0885
+  Critic Loss: 0.6888
+  Entropy: 4.0020
+  Entropy Coef: 0.0067 (zmniejsza sie)
 ============================================================
 Epoch 8/20
-  Epoch Total: -124.0000 (z 150 wyscigow)
-  Avg per  race: -0.8267
-  Last 100 races avg: -0.8000
+  Epoch Total: 199.3251 (z 150 wyscigow)
+  Avg per  race: 1.3288
+  Last 100 races avg: 1.3358
   Buffer size: ~750 decyzji
-  Actor Loss: -0.0357
-  Critic Loss: 0.8585
-  Entropy: 4.6282
-  Entropy Coef: 0.0995 (zmniejsza sie)
+  Actor Loss: -0.0495
+  Critic Loss: 0.6898
+  Entropy: 3.9881
+  Entropy Coef: 0.0062 (zmniejsza sie)
 ============================================================
 Epoch 9/20
-  Epoch Total: -134.0000 (z 150 wyscigow)
-  Avg per  race: -0.8933
-  Last 100 races avg: -0.8800
+  Epoch Total: 228.1449 (z 150 wyscigow)
+  Avg per  race: 1.5210
+  Last 100 races avg: 1.5403
   Buffer size: ~750 decyzji
-  Actor Loss: -0.0214
-  Critic Loss: 0.8305
-  Entropy: 4.6184
-  Entropy Coef: 0.0932 (zmniejsza sie)
+  Actor Loss: -0.0422
+  Critic Loss: 0.6957
+  Entropy: 3.9192
+  Entropy Coef: 0.0057 (zmniejsza sie)
 ============================================================
 Epoch 10/20
-  Epoch Total: -130.0000 (z 150 wyscigow)
-  Avg per  race: -0.8667
-  Last 100 races avg: -0.8800
+  Epoch Total: 254.0505 (z 150 wyscigow)
+  Avg per  race: 1.6937
+  Last 100 races avg: 1.8060
   Buffer size: ~750 decyzji
-  Actor Loss: -0.0223
-  Critic Loss: 0.8267
-  Entropy: 4.5917
-  Entropy Coef: 0.0868 (zmniejsza sie)
+  Actor Loss: -0.0444
+  Critic Loss: 0.7257
+  Entropy: 3.8570
+  Entropy Coef: 0.0053 (zmniejsza sie)
 ============================================================
 Epoch 11/20
-  Epoch Total: -144.0000 (z 150 wyscigow)
-  Avg per  race: -0.9600
-  Last 100 races avg: -0.9400
+  Epoch Total: 226.8085 (z 150 wyscigow)
+  Avg per  race: 1.5121
+  Last 100 races avg: 1.6391
   Buffer size: ~750 decyzji
-  Actor Loss: -0.0343
-  Critic Loss: 0.5714
-  Entropy: 4.5933
-  Entropy Coef: 0.0805 (zmniejsza sie)
+  Actor Loss: -0.0466
+  Critic Loss: 0.6939
+  Entropy: 3.8081
+  Entropy Coef: 0.0048 (zmniejsza sie)
 ============================================================
 Epoch 12/20
-  Epoch Total: -132.0000 (z 150 wyscigow)
-  Avg per  race: -0.8800
-  Last 100 races avg: -0.8400
+  Epoch Total: 254.9000 (z 150 wyscigow)
+  Avg per  race: 1.6993
+  Last 100 races avg: 1.6048
   Buffer size: ~750 decyzji
-  Actor Loss: -0.0407
-  Critic Loss: 0.9364
-  Entropy: 4.6368
-  Entropy Coef: 0.0742 (zmniejsza sie)
+  Actor Loss: -0.0473
+  Critic Loss: 0.6415
+  Entropy: 3.8399
+  Entropy Coef: 0.0043 (zmniejsza sie)
 ============================================================
 Epoch 13/20
-  Epoch Total: -122.0000 (z 150 wyscigow)
-  Avg per  race: -0.8133
-  Last 100 races avg: -0.8800
+  Epoch Total: 230.3308 (z 150 wyscigow)
+  Avg per  race: 1.5355
+  Last 100 races avg: 1.4539
   Buffer size: ~750 decyzji
-  Actor Loss: -0.0215
-  Critic Loss: 0.9576
-  Entropy: 4.6472
-  Entropy Coef: 0.0679 (zmniejsza sie)
+  Actor Loss: -0.0520
+  Critic Loss: 0.7739
+  Entropy: 3.6968
+  Entropy Coef: 0.0038 (zmniejsza sie)
 ============================================================
 Epoch 14/20
-  Epoch Total: -132.0000 (z 150 wyscigow)
-  Avg per  race: -0.8800
-  Last 100 races avg: -0.9000
+  Epoch Total: 242.6118 (z 150 wyscigow)
+  Avg per  race: 1.6174
+  Last 100 races avg: 1.5285
   Buffer size: ~750 decyzji
-  Actor Loss: -0.0364
-  Critic Loss: 0.8879
-  Entropy: 4.6325
-  Entropy Coef: 0.0616 (zmniejsza sie)
+  Actor Loss: -0.0501
+  Critic Loss: 0.7254
+  Entropy: 3.7382
+  Entropy Coef: 0.0034 (zmniejsza sie)
 ============================================================
 Epoch 15/20
-  Epoch Total: -132.0000 (z 150 wyscigow)
-  Avg per  race: -0.8800
-  Last 100 races avg: -0.8600
+  Epoch Total: 262.1189 (z 150 wyscigow)
+  Avg per  race: 1.7475
+  Last 100 races avg: 1.7395
   Buffer size: ~750 decyzji
-  Actor Loss: -0.0288
-  Critic Loss: 0.8627
-  Entropy: 4.6652
-  Entropy Coef: 0.0553 (zmniejsza sie)
+  Actor Loss: -0.0510
+  Critic Loss: 0.6244
+  Entropy: 3.7874
+  Entropy Coef: 0.0029 (zmniejsza sie)
 ============================================================
 Epoch 16/20
-  Epoch Total: -126.0000 (z 150 wyscigow)
-  Avg per  race: -0.8400
-  Last 100 races avg: -0.8200
+  Epoch Total: 247.7159 (z 150 wyscigow)
+  Avg per  race: 1.6514
+  Last 100 races avg: 1.5039
   Buffer size: ~750 decyzji
-  Actor Loss: -0.0276
-  Critic Loss: 0.8665
-  Entropy: 4.6144
-  Entropy Coef: 0.0489 (zmniejsza sie)
+  Actor Loss: -0.0448
+  Critic Loss: 0.6558
+  Entropy: 3.8044
+  Entropy Coef: 0.0024 (zmniejsza sie)
 ============================================================
 Epoch 17/20
-  Epoch Total: -130.0000 (z 150 wyscigow)
-  Avg per  race: -0.8667
-  Last 100 races avg: -0.8600
+  Epoch Total: 239.4332 (z 150 wyscigow)
+  Avg per  race: 1.5962
+  Last 100 races avg: 1.5207
   Buffer size: ~750 decyzji
-  Actor Loss: -0.0322
-  Critic Loss: 0.8818
-  Entropy: 4.5568
-  Entropy Coef: 0.0426 (zmniejsza sie)
+  Actor Loss: -0.0469
+  Critic Loss: 0.6745
+  Entropy: 3.7496
+  Entropy Coef: 0.0019 (zmniejsza sie)
 ============================================================
 Epoch 18/20
-  Epoch Total: -124.0000 (z 150 wyscigow)
-  Avg per  race: -0.8267
-  Last 100 races avg: -0.8400
+  Epoch Total: 235.0082 (z 150 wyscigow)
+  Avg per  race: 1.5667
+  Last 100 races avg: 1.5434
   Buffer size: ~750 decyzji
-  Actor Loss: -0.0262
-  Critic Loss: 0.9375
-  Entropy: 4.5611
-  Entropy Coef: 0.0363 (zmniejsza sie)
+  Actor Loss: -0.0503
+  Critic Loss: 0.6995
+  Entropy: 3.7092
+  Entropy Coef: 0.0015 (zmniejsza sie)
 ============================================================
 Epoch 19/20
-  Epoch Total: -132.0000 (z 150 wyscigow)
-  Avg per  race: -0.8800
-  Last 100 races avg: -0.9000
+  Epoch Total: 269.0836 (z 150 wyscigow)
+  Avg per  race: 1.7939
+  Last 100 races avg: 1.6726
   Buffer size: ~750 decyzji
-  Actor Loss: -0.0282
-  Critic Loss: 0.7916
-  Entropy: 4.5457
-  Entropy Coef: 0.0300 (zmniejsza sie)
-============================================================
-Epoch 0/20
-  Epoch Total: -42.0000 (z 50 wyscigow)
-  Avg per  race: -0.8400
-  Last 100 races avg: -0.8400
-  Buffer size: ~250 decyzji
-  Actor Loss: -0.0499
-  Critic Loss: 1.5598
-  Entropy: 4.1191
-  Entropy Coef: 0.3000 (zmniejsza sie)
-============================================================
-Epoch 1/20
-  Epoch Total: -42.0000 (z 50 wyscigow)
-  Avg per  race: -0.8400
-  Last 100 races avg: -0.8400
-  Buffer size: ~250 decyzji
-  Actor Loss: -0.0439
-  Critic Loss: 0.9711
-  Entropy: 4.4136
-  Entropy Coef: 0.2868 (zmniejsza sie)
-============================================================
+  Actor Loss: -0.0450
+  Critic Loss: 0.7052
+  Entropy: 3.6703
+  Entropy Coef: 0.0010 (zmniejsza sie)

@@ -67,11 +67,9 @@ def generate_weather_conditions(num_conditions,mRaining_start=0.0,mAmbientTemp_s
                 gap_timer = round(randint(2, 5) * temp_factor, 0)
                 
             else:
-                # SCHNIĘCIE (Drying)
-                # Gorący tor (30C) -> (50-30)=20 -> schnie szybko (mały delay)
-                # Zimny tor (10C) -> (50-10)=40 -> schnie wolno (duży delay)
+               
                 temp_factor = max(1, 50 - mAmbientTemp)
-                gap_timer = round(randint(5, 10) * temp_factor, 0)
+                gap_timer = round(randint(15, 25) * temp_factor, 0)  # Wydłużone z 5-10 do 15-25
 
         # 3. OBSŁUGA OPÓŹNIENIA (Step logic)
         if gap_timer > 0:
@@ -80,13 +78,6 @@ def generate_weather_conditions(num_conditions,mRaining_start=0.0,mAmbientTemp_s
             # Czas minął - następuje "skok" wartości (schodkowo)
             mPathWetness = target_wetness
         
-        # if mAmbientTemp == next_temp:
-        #     next_temp = mAmbientTemp + (choice([-2, -1, 0]) if mAmbientTemp > 40 else (choice([0, 1, 2]) if mAmbientTemp < 9 else choice([-2, -1, 0, 1, 2])))
-        #     how_quickly = randint(50, 200)
-        #     change_per_step = round((next_temp - mAmbientTemp) / how_quickly, 2)
-
-        # mAmbientTemp += change_per_step
-        # mAmbientTemp = min(40, max(5, mAmbientTemp))
 
         if abs(mAmbientTemp - next_temp) < 0.1:
     
@@ -100,28 +91,17 @@ def generate_weather_conditions(num_conditions,mRaining_start=0.0,mAmbientTemp_s
                 
             next_temp = mAmbientTemp + change
         
-        # Opcjonalnie: Zmień prędkość zmiany przy każdym nowym celu, żeby było ciekawiej
+     
         smoothing_speed = uniform(0.001, 0.008)
 
         # 2. Fizyka zmiany (LERP)
-        # To jedno proste równanie zastępuje change_per_step i how_quickly
+       
         mAmbientTemp += (next_temp - mAmbientTemp) * smoothing_speed
 
         # 3. Bezpiecznik (Clamp)
         mAmbientTemp = min(45, max(5, mAmbientTemp))
 
-        # --- 3. Temperatura Toru (FIZYKA) ---
-        
-        # Ustalanie "Celu" temperatury toru
-        # if mRaining > 0.05:
-        #     # Gdy pada: woda chłodzi tor -> Tor dąży do temperatury otoczenia (lub nieco niżej przez parowanie)
-        #     target_track_temp = mAmbientTemp - 2.0 
-        #     inertia = 0.02 # Szybkie chłodzenie wodą
-        # else:
-        #     # Gdy sucho: słońce grzeje -> Tor dąży do Ambient + SolarOffset
-        #     # SolarOffset np. 10 stopni.
-        #     target_track_temp = mAmbientTemp + 12.0 
-        #     inertia = 0.005 # Asfalt nagrzewa/stygnie wolniej niż woda go chłodzi
+   
 
         if mTrackTemp == target_track_temp:
             if mTrackTemp < mAmbientTemp:
@@ -139,7 +119,7 @@ def generate_weather_conditions(num_conditions,mRaining_start=0.0,mAmbientTemp_s
         else:
             mTrackTemp = target_track_temp
  
-        # mTrackTemp += (target_track_temp - mTrackTemp) * inertia + uniform(-0.05, 0.05)
+       
 
         # Hard limits
         mTrackTemp = min(47.35, max(9, mTrackTemp))

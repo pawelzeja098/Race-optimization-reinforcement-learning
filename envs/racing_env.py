@@ -395,7 +395,7 @@ class RacingEnv(gym.Env):
         
         reward = base_reward + time_bonus
         
-        # === 3. REWARD SHAPING - KARY ZA ZŁE DECYZJE ===
+       
         
         # Kara za złe opony w deszczu
         is_raining = self.raining > 0.1  # Pada jeśli > 10%
@@ -410,21 +410,19 @@ class RacingEnv(gym.Env):
             
         elif not is_raining and tire_type == 3 and self.path_wetness < 0.1:  # Wet na suchym
             reward -= 15  # OSŁABIONE 30→15
-        # elif is_wet_track and tire_type in [0, 1, 2]:  # Suche opony na mokrym torze (bez deszczu)
-        #     reward -= 40  # Kara za slicki na mokrym - wolniejsze, ryzykowne
         
         # === NOWE: KARY ZA ZŁE OPONY WZGLĘDEM DŁUGOŚCI WYŚCIGU ===
         if hasattr(self, 'just_pitted') and self.just_pitted:
             race_duration = self.end_et  # Długość wyścigu w sekundach
             
-            # Wyścigi ≤35 min (1932s): Twarde/średnie to STRATA
-            if race_duration <= 2200:  # 36 minut - 1932s mieści się!
-                if tire_type == 2:  # Hard - nie zużyjesz ich!
-                    reward -= 12  # OSŁABIONE 25→12
-                elif tire_type == 1:  # Medium - za konserwatywne  
-                    reward -= 10  # OSŁABIONE 20→10
-                elif tire_type == 0:  # Soft - IDEALNE dla takich wyścigów
-                    reward += 10  # OSŁABIONE 15→10
+      
+            if race_duration <= 2200: 
+                if tire_type == 2: 
+                    reward -= 12  
+                elif tire_type == 1: 
+                    reward -= 10 
+                elif tire_type == 0:
+                    reward += 10 
             
             # Długie wyścigi (>1h): Miękkie to STRATA (zbyt częste pit-stopy)
             elif race_duration > 3600:  # 1 godzina
@@ -435,20 +433,19 @@ class RacingEnv(gym.Env):
                 elif tire_type == 1:  # Medium - dobry kompromis
                     reward += 5
         
-        # === KARY ZA ZŁE DECYZJE PALIWOWE ===
+    
         if hasattr(self, 'just_pitted') and self.just_pitted:
             # Kara za przedwczesny pit-stop (za dużo paliwa)
             if self.fuel_before_pit > 0.5:  # Więcej niż 50% paliwa
                 reward -= 8  # OSŁABIONE 15→8
             
-            # Kara za bezsensowne dolanie (target < current)
+ 
             if self.target_fuel < self.fuel_before_pit:
                 reward -= 10  # OSŁABIONE 20→10
             
         
        
 
-        # Kara za niepotrzebną naprawę
         if hasattr(self, 'just_repaired') and self.just_repaired:
             total_damage = sum(self.dent_severity)
             if total_damage <= 1:  # Prawie brak uszkodzeń
@@ -489,7 +486,7 @@ class RacingEnv(gym.Env):
 
                 reward += laps_bonus
                 # self.make_plots()
-                # self.make_plots_impacts()
+                self.make_plots_weather()
                 self.history = []
                 break
             
@@ -891,70 +888,73 @@ class RacingEnv(gym.Env):
 
     def make_plots_weather(self):
         history_array = np.array(self.history)
-        plt.figure(figsize=(20, 5))
+        # Rozmiar zoptymalizowany dla pracy inżynierskiej A4 (4 wykresy obok siebie)
+        fig = plt.figure(figsize=(12, 3), dpi=100)
+        
         plt.subplot(1, 4, 1)
-        plt.plot(history_array[:, 2], label='Wilgotność toru', color='purple')
-        plt.title('Wilgotność Toru')
-        plt.xlabel('Krok czasowy')
-        plt.ylabel('Wartość')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 2], label='Wilgotność nawierzchni', color='purple', linewidth=1.2)
+        plt.title('Wilgotność nawierzchni', fontsize=10, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=9)
+        plt.ylabel('Wartość', fontsize=9)
+        plt.legend(fontsize=8)
+        plt.grid(True, alpha=0.3)
         
         plt.subplot(1, 4, 2)
-        plt.plot(history_array[:, 9], label='Natężenie deszczu', color='blue')
-        plt.title('Natężenie Deszczu')
-        plt.xlabel('Krok czasowy')
-        plt.ylabel('Wartość')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 9], label='Natężenie opadów', color='blue', linewidth=1.2)
+        plt.title('Natężenie opadów', fontsize=10, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=9)
+        plt.ylabel('Wartość', fontsize=9)
+        plt.legend(fontsize=8)
+        plt.grid(True, alpha=0.3)
         
-
         plt.subplot(1, 4, 3)
-        plt.plot(history_array[:, 33], label='Temperatura otoczenia', color='brown')
-        plt.title('Temperatura Otoczenia')
-        plt.xlabel('Krok czasowy')
-        plt.ylabel('Temperatura (°C)')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 33], label='Temperatura otoczenia', color='brown', linewidth=1.2)
+        plt.title('Temperatura otoczenia', fontsize=10, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=9)
+        plt.ylabel('Temperatura [°C]', fontsize=9)
+        plt.legend(fontsize=8)
+        plt.grid(True, alpha=0.3)
 
-        # 18. Track Temperature
         plt.subplot(1, 4, 4)
-        plt.plot(history_array[:, 34], label='Temperatura toru', color='cyan')
-        plt.title('Temperatura Toru')
-        plt.xlabel('Krok czasowy')
-        plt.ylabel('Temperatura (°C)')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 34], label='Temperatura toru', color='cyan', linewidth=1.2)
+        plt.title('Temperatura toru', fontsize=10, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=9)
+        plt.ylabel('Temperatura [°C]', fontsize=9)
+        plt.legend(fontsize=8)
+        plt.grid(True, alpha=0.3)
+        
         plt.tight_layout()
         plt.show()
     
     def make_plots_impacts(self):
         history_array = np.array(self.history)
-        plt.figure(figsize=(20, 5))
+        # Rozmiar zoptymalizowany dla pracy inżynierskiej A4 (3 wykresy obok siebie)
+        fig = plt.figure(figsize=(11, 3.5), dpi=100)
+        
         plt.subplot(1, 3, 1)
-        plt.plot(history_array[:, 10], label='Flaga uderzenia', color='gray')
-        plt.title('Flaga Uderzenia')
-        plt.xlabel('Krok czasowy')
-        plt.ylabel('Wartość')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 10], label='Flaga uderzenia', color='gray', linewidth=1.2)
+        plt.title('Flaga uderzenia', fontsize=11, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=10)
+        plt.ylabel('Flaga', fontsize=10)
+        plt.legend(fontsize=9)
+        plt.grid(True, alpha=0.3)
 
         plt.subplot(1, 3, 2)
-        plt.plot(history_array[:, 32], label='Siła uderzenia', color='darkred')
-        plt.title('Siła Uderzenia')
-        plt.xlabel('Krok czasowy')
-        plt.ylabel('Siła [N]')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 32], label='Siła uderzenia', color='darkred', linewidth=1.2)
+        plt.title('Siła uderzenia', fontsize=11, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=10)
+        plt.ylabel('Siła [N]', fontsize=10)
+        plt.legend(fontsize=9)
+        plt.grid(True, alpha=0.3)
 
         plt.subplot(1, 3, 3)
         for i in range(8):
-            plt.plot(history_array[:, 15 + i], label=f'Element {i}')
-        plt.title('Uszkodzenia pojazdu')
-        plt.xlabel('Krok czasowy')
-        plt.ylabel('Stopień uszkodzenia')
-        plt.legend(fontsize=6)
-        plt.grid(True)
+            plt.plot(history_array[:, 15 + i], label=f'Element {i}', linewidth=1.0)
+        plt.title('Uszkodzenia pojazdu', fontsize=11, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=10)
+        plt.ylabel('Stopień uszkodzenia', fontsize=10)
+        plt.legend(fontsize=7, ncol=2)
+        plt.grid(True, alpha=0.3)
 
         plt.tight_layout()
         plt.show()
@@ -962,190 +962,209 @@ class RacingEnv(gym.Env):
     def make_plots(self):
         history_array = np.array(self.history)
         
-        # Utworzenie większej figury dla wszystkich wykresów
-        fig = plt.figure(figsize=(20, 15))
+        # Rozmiar zoptymalizowany dla pracy inżynierskiej A4 (format poziomy)
+        fig = plt.figure(figsize=(11.7, 16.5), dpi=100)  # A4 poziomo (297mm x 210mm)
         
         # 1. Lap Distance
         plt.subplot(6, 7, 1)
-        plt.plot(history_array[:, 0], label='Lap Distance', color='blue')
-        plt.title('Lap Distance')
-        plt.xlabel('Time Steps')
-        plt.ylabel('Value')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 0], label='Postęp okrążenia', color='blue', linewidth=0.8)
+        plt.title('Postęp okrążenia', fontsize=9, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=7)
+        plt.ylabel('Wartość', fontsize=7)
+        plt.legend(fontsize=6)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(labelsize=6)
 
         # 2. Fuel Tank Capacity
         plt.subplot(6, 7, 2)
-        plt.plot(history_array[:, 1], label='Fuel', color='green')
-        plt.title('Fuel Tank Capacity')
-        plt.xlabel('Time Steps')
-        plt.ylabel('Value')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 1], label='Paliwo', color='green', linewidth=0.8)
+        plt.title('Poziom paliwa', fontsize=9, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=7)
+        plt.ylabel('Wartość', fontsize=7)
+        plt.legend(fontsize=6)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(labelsize=6)
 
         plt.subplot(6, 7, 3)
-        plt.plot(history_array[:, 2], label='Path Wetness', color='purple')
-        plt.title('Path Wetness')
-        plt.xlabel('Time Steps')
-        plt.ylabel('Value')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 2], label='Wilgotność toru', color='purple', linewidth=0.8)
+        plt.title('Wilgotność toru', fontsize=9, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=7)
+        plt.ylabel('Wartość', fontsize=7)
+        plt.legend(fontsize=6)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(labelsize=6)
 
   
         # 3-6. Wheel Wear (all 4 wheels)
         plt.subplot(6, 7, 4)
-        plt.plot(history_array[:, 3], label='Wheel 1')
-        plt.plot(history_array[:, 4], label='Wheel 2')
-        plt.plot(history_array[:, 5], label='Wheel 3')
-        plt.plot(history_array[:, 6], label='Wheel 4')
-        plt.title('Wheel Wear')
-        plt.xlabel('Time Steps')
-        plt.ylabel('Wear')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 3], label='Koło 1', linewidth=0.8)
+        plt.plot(history_array[:, 4], label='Koło 2', linewidth=0.8)
+        plt.plot(history_array[:, 5], label='Koło 3', linewidth=0.8)
+        plt.plot(history_array[:, 6], label='Koło 4', linewidth=0.8)
+        plt.title('Zużycie opon', fontsize=9, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=7)
+        plt.ylabel('Zużycie', fontsize=7)
+        plt.legend(fontsize=5)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(labelsize=6)
 
 
         
         plt.subplot(6, 7, 5)
-        plt.plot(history_array[:, 7], label='Step Ratio', color='orange')
-        plt.title('Current Step Ratio')
-        plt.xlabel('Time Steps')
-        plt.ylabel('Ratio')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 7], label='Współczynnik kroku', color='orange', linewidth=0.8)
+        plt.title('Współczynnik kroku', fontsize=9, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=7)
+        plt.ylabel('Współczynnik', fontsize=7)
+        plt.legend(fontsize=6)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(labelsize=6)
 
          # 13. Refueled Amount
         plt.subplot(6, 7, 6)
-        plt.plot(history_array[:, 8], label='Refueled Amount', color='orange')
-        plt.title('Refueled Amount')
-        plt.xlabel('Time Steps')
-        plt.ylabel('liters')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 8], label='Dotankowane paliwo', color='orange', linewidth=0.8)
+        plt.title('Ilość dotankowanego paliwa', fontsize=9, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=7)
+        plt.ylabel('Litry', fontsize=7)
+        plt.legend(fontsize=6)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(labelsize=6)
 
         # 16. Raining
         plt.subplot(6, 7, 7)
-        plt.plot(history_array[:, 9], label='Raining', color='skyblue')
-        plt.title('Raining Status')
-        plt.xlabel('Time Steps')
-        plt.ylabel('0/1')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 9], label='Opady', color='skyblue', linewidth=0.8)
+        plt.title('Status opadów', fontsize=9, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=7)
+        plt.ylabel('0/1', fontsize=7)
+        plt.legend(fontsize=6)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(labelsize=6)
 
          # 19. Impact flag
         plt.subplot(6, 7, 8)
-        plt.plot(history_array[:, 10], label='Impact Flag', color='gray')
-        plt.title('Impact Flag')
-        plt.xlabel('Time Steps')
-        plt.ylabel('Flag')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 10], label='Flaga uderzenia', color='gray', linewidth=0.8)
+        plt.title('Flaga uderzenia', fontsize=9, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=7)
+        plt.ylabel('Flaga', fontsize=7)
+        plt.legend(fontsize=6)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(labelsize=6)
 
         # 33. In Pits
         plt.subplot(6, 7, 9)
-        plt.plot(history_array[:, 11], label='In Pits', color='magenta')
-        plt.title('In Pits Status')
-        plt.xlabel('Time Steps')
-        plt.ylabel('0/1')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 11], label='W boksie', color='magenta', linewidth=0.8)
+        plt.title('Status pit-stopu', fontsize=9, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=7)
+        plt.ylabel('0/1', fontsize=7)
+        plt.legend(fontsize=6)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(labelsize=6)
 
          # 36. Changed Tires Flag
         plt.subplot(6, 7, 10)
-        plt.plot(history_array[:, 12], label='Changed Tires', color='lime')
-        plt.title('Changed Tires Flag')
-        plt.xlabel('Time Steps')
-        plt.ylabel('0/1')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 12], label='Wymiana opon', color='lime', linewidth=0.8)
+        plt.title('Flaga wymiany opon', fontsize=9, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=7)
+        plt.ylabel('0/1', fontsize=7)
+        plt.legend(fontsize=6)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(labelsize=6)
 
         # 37. Is Repairing Flag
         plt.subplot(6, 7, 11)
-        plt.plot(history_array[:, 13], label='Is Repairing', color='salmon')
-        plt.title('Is Repairing Flag')
-        plt.xlabel('Time Steps')
-        plt.ylabel('0/1')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 13], label='Naprawa', color='salmon', linewidth=0.8)
+        plt.title('Flaga naprawy', fontsize=9, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=7)
+        plt.ylabel('0/1', fontsize=7)
+        plt.legend(fontsize=6)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(labelsize=6)
 
         # 15. Num Penalties
         plt.subplot(6, 7, 12)
-        plt.plot(history_array[:, 14], label='Penalties', color='black')
-        plt.title('Number of Penalties')
-        plt.xlabel('Time Steps')
-        plt.ylabel('Count')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 14], label='Kary', color='black', linewidth=0.8)
+        plt.title('Liczba kar', fontsize=9, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=7)
+        plt.ylabel('Liczba', fontsize=7)
+        plt.legend(fontsize=6)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(labelsize=6)
 
         # 20-27. Dent Severity (all 8 dents)
         plt.subplot(6, 7, 13)
         for i in range(8):
-            plt.plot(history_array[:, 15 + i], label=f'Dent {i}')
-        plt.title('Dent Severity')
-        plt.xlabel('Time Steps')
-        plt.ylabel('Severity')
-        plt.legend(fontsize=6)
-        plt.grid(True)
+            plt.plot(history_array[:, 15 + i], label=f'Element {i}', linewidth=0.7)
+        plt.title('Stopień uszkodzenia', fontsize=9, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=7)
+        plt.ylabel('Uszkodzenie', fontsize=7)
+        plt.legend(fontsize=5, ncol=2)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(labelsize=6)
 
         # 30. Total Laps
         plt.subplot(6, 7, 14)
-        plt.plot(history_array[:, 23], label='Total Laps', color='navy')
-        plt.title('Total Laps')
-        plt.xlabel('Time Steps')
-        plt.ylabel('Laps')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 23], label='Okrążenia', color='navy', linewidth=0.8)
+        plt.title('Łączna liczba okrążeń', fontsize=9, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=7)
+        plt.ylabel('Okrążenia', fontsize=7)
+        plt.legend(fontsize=6)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(labelsize=6)
 
        
 
         # 31. Sector
         plt.subplot(6, 7, 15)
-        plt.plot(history_array[:, 24], label='Sector', color='green')
-        plt.title('Sector')
-        plt.xlabel('Time Steps')
-        plt.ylabel('Sector (0/1/2)')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 24], label='Sektor', color='green', linewidth=0.8)
+        plt.title('Sektor toru', fontsize=9, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=7)
+        plt.ylabel('Sektor (0/1/2)', fontsize=7)
+        plt.legend(fontsize=6)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(labelsize=6)
 
           # 32. Num Pitstops
         plt.subplot(6, 7, 16)
-        plt.plot(history_array[:, 25], label='Num Pitstops', color='olive')
-        plt.title('Number of Pitstops')
-        plt.xlabel('Time Steps')
-        plt.ylabel('Count')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 25], label='Liczba pit-stopów', color='olive', linewidth=0.8)
+        plt.title('Liczba pit-stopów', fontsize=9, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=7)
+        plt.ylabel('Liczba', fontsize=7)
+        plt.legend(fontsize=6)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(labelsize=6)
 
          # 34. Tire Compound Index
         plt.subplot(6, 7, 17)
-        plt.plot(history_array[:, 26], label='Tire Compound', color='teal')
-        plt.title('Tire Compound Index')
-        plt.xlabel('Time Steps')
-        plt.ylabel('Index')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 26], label='Typ opon', color='teal', linewidth=0.8)
+        plt.title('Indeks typu opon', fontsize=9, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=7)
+        plt.ylabel('Indeks', fontsize=7)
+        plt.legend(fontsize=6)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(labelsize=6)
 
          # 35. Usage Multiplier
         plt.subplot(6, 7, 18)
-        plt.plot(history_array[:, 27], label='Usage Multiplier', color='coral')
-        plt.title('Usage Multiplier')
-        plt.xlabel('Time Steps')
-        plt.ylabel('Multiplier')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 27], label='Mnożnik zużycia', color='coral', linewidth=0.8)
+        plt.title('Mnożnik zużycia', fontsize=9, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=7)
+        plt.ylabel('Mnożnik', fontsize=7)
+        plt.legend(fontsize=6)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(labelsize=6)
 
 
         # 7-10. Wheel Temperature (all 4 wheels)
         plt.subplot(6, 7, 19)
-        plt.plot(history_array[:, 28], label='Wheel 1')
-        plt.plot(history_array[:, 29], label='Wheel 2')
-        plt.plot(history_array[:, 30], label='Wheel 3')
-        plt.plot(history_array[:, 31], label='Wheel 4')
-        plt.title('Wheel Temperature')
-        plt.xlabel('Time Steps')
-        plt.ylabel('Temp (°C)')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 28], label='Koło 1', linewidth=0.8)
+        plt.plot(history_array[:, 29], label='Koło 2', linewidth=0.8)
+        plt.plot(history_array[:, 30], label='Koło 3', linewidth=0.8)
+        plt.plot(history_array[:, 31], label='Koło 4', linewidth=0.8)
+        plt.title('Temperatura kół', fontsize=9, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=7)
+        plt.ylabel('Temp (°C)', fontsize=7)
+        plt.legend(fontsize=5)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(labelsize=6)
 
         # 11. Path Wetness
         
@@ -1157,12 +1176,13 @@ class RacingEnv(gym.Env):
 
         # 14. Last Impact Magnitude
         plt.subplot(6, 7, 20)
-        plt.plot(history_array[:, 32], label='Impact Magnitude', color='darkred')
-        plt.title('Last Impact Magnitude')
-        plt.xlabel('Time Steps')
-        plt.ylabel('Magnitude')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 32], label='Siła uderzenia', color='darkred', linewidth=0.8)
+        plt.title('Ostatnia siła uderzenia', fontsize=9, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=7)
+        plt.ylabel('Siła [N]', fontsize=7)
+        plt.legend(fontsize=6)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(labelsize=6)
 
         
 
@@ -1170,33 +1190,36 @@ class RacingEnv(gym.Env):
 
         # 17. Ambient Temperature
         plt.subplot(6, 7, 21)
-        plt.plot(history_array[:, 33], label='Ambient Temp', color='brown')
-        plt.title('Ambient Temperature')
-        plt.xlabel('Time Steps')
-        plt.ylabel('Temp (°C)')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 33], label='Temp. otoczenia', color='brown', linewidth=0.8)
+        plt.title('Temperatura otoczenia', fontsize=9, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=7)
+        plt.ylabel('Temp (°C)', fontsize=7)
+        plt.legend(fontsize=6)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(labelsize=6)
 
         # 18. Track Temperature
         plt.subplot(6, 7, 22)
-        plt.plot(history_array[:, 34], label='Track Temp', color='cyan')
-        plt.title('Track Temperature')
-        plt.xlabel('Time Steps')
-        plt.ylabel('Temp (°C)')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 34], label='Temp. toru', color='cyan', linewidth=0.8)
+        plt.title('Temperatura toru', fontsize=9, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=7)
+        plt.ylabel('Temp (°C)', fontsize=7)
+        plt.legend(fontsize=6)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(labelsize=6)
 
         # 19. End ET
         plt.subplot(6, 7, 23)
-        plt.plot(history_array[:, 35], label='End ET', color='gray')
-        plt.title('End ET')
-        plt.xlabel('Time Steps')
-        plt.ylabel('ET')
-        plt.legend()
-        plt.grid(True)
+        plt.plot(history_array[:, 35], label='Czas końcowy', color='gray', linewidth=0.8)
+        plt.title('Czas końcowy wyścigu', fontsize=9, fontweight='bold')
+        plt.xlabel('Krok czasowy', fontsize=7)
+        plt.ylabel('Czas [s]', fontsize=7)
+        plt.legend(fontsize=6)
+        plt.grid(True, alpha=0.3)
+        plt.tick_params(labelsize=6)
 
         plt.tight_layout()
-        plt.savefig(f'ai/rl_training_race_historyplots/race_history_plots_{self.num_race}.png', dpi=150)
+        plt.savefig(f'ai/rl_training_race_historyplots/race_history_plots_{self.num_race}.png', dpi=100)
         plt.show()
         # plt.close(fig)
 # ...existing code...

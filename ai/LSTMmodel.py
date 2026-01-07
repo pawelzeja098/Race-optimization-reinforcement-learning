@@ -180,6 +180,10 @@ def generate_predictions(model, input_seq,scaler_X_min_max=None, scaler_X_robust
     with torch.no_grad():
         input_tensor = torch.tensor(input_seq, dtype=torch.float32).reshape(1, 1, X_SHAPE).to(device)
         predictions , h_c = model(input_tensor, h_c)
+
+        # predictions_scaled = predictions.reshape(1, Y_SHAPE)
+        # predictions_raw = predictions_scaled.cpu().numpy().flatten()
+
         predictions_scaled = predictions.cpu().numpy().reshape(1, Y_SHAPE)
 
         predictions_raw = np.zeros_like(predictions_scaled)
@@ -195,7 +199,8 @@ def generate_predictions(model, input_seq,scaler_X_min_max=None, scaler_X_robust
         # scaler_Y_robust oczekuje 4 cech, dajemy mu 4 cechy
         predictions_raw[:, robust_scaler_y] = scaler_Y_robust.inverse_transform(predictions_scaled[:, robust_scaler_y])
         
-    
+        h_c = (h_c[0].detach(), h_c[1].detach())  # Odłączamy stany od grafu obliczeń
+
         return predictions_raw.flatten(), h_c
     
 def load_data_from_db():
