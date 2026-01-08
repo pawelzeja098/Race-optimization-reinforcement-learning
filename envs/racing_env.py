@@ -89,27 +89,7 @@ class RacingEnv(gym.Env):
         self.LSTM_model = LSTMStatePredictor(input_size=X_SHAPE, hidden_size=256, output_size=Y_SHAPE, num_layers=1).to(device)
         self.LSTM_model.load_state_dict(torch.load("models/lstmdeltaT_model1.pth", map_location=device))
         self.LSTM_model.eval()
-        # self.curr_window = deque(maxlen=30)
-
-        # self.impact_magnitude_history = []
-        # self.impact_flag_history = []
-        # self.dent_severity_history = []
-        # self.dent_severity_change = [0.0]*8
-        # for i in range(self.total_steps):
-
-        #     impact_magnitude = random_impact_magnitude(probabilities=probabilities, bin_edges=bin_edges)
-        #     if impact_magnitude > 0.0:
-        #         impact_flag = 1.0
-        #         self.dent_severity_change = generate_dent_severity(impact_magnitude)
-        #     else:
-        #         impact_flag = 0.0
-        #         self.dent_severity_change = [0.0]*8
-                    
-            
-        #     self.impact_magnitude_history.append(impact_magnitude)
-        #     self.impact_flag_history.append(impact_flag)
-        #     self.dent_severity_history.append(self.dent_severity_change)
-               
+     
 
         #New obs space including only data aviable directly from simulator. 
         self.observation_space = gym.spaces.Box(
@@ -394,65 +374,59 @@ class RacingEnv(gym.Env):
             reward -= time_penalty
         
         reward = base_reward + time_bonus
+
+        return reward
         
        
+     
+   
+        # is_raining = self.raining > 0.1  # Pada jeśli > 10%
+        # is_wet_track = self.path_wetness > 0.1
+        # tire_type = self.tire_compound_index  # 0=soft, 1=med, 2=hard, 3=wet
         
-        # Kara za złe opony w deszczu
-        is_raining = self.raining > 0.1  # Pada jeśli > 10%
-        is_wet_track = self.path_wetness > 0.1
-        tire_type = self.tire_compound_index  # 0=soft, 1=med, 2=hard, 3=wet
-        
-        # Progresywna kara: im mokrzej, tym większa kara za slicki
-        if tire_type != 3 and self.path_wetness > 0.1:  # Slicki na mokrym
-            # OSŁABIONE: 0.3→-20, 0.5→-31, 0.8→-48, 1.0→-59 (było 40-117)
-            wetness_penalty = 20 + (self.path_wetness - 0.3) * 55
-            reward -= wetness_penalty
+        # # Progresywna kara: im mokrzej, tym większa kara za slicki
+        # if tire_type != 3 and self.path_wetness > 0.1:  # Slicki na mokrym
+        #   
+        #     wetness_penalty = 20 + (self.path_wetness - 0.3) * 55
+        #     reward -= wetness_penalty
             
-        elif not is_raining and tire_type == 3 and self.path_wetness < 0.1:  # Wet na suchym
-            reward -= 15  # OSŁABIONE 30→15
-        
-        # === NOWE: KARY ZA ZŁE OPONY WZGLĘDEM DŁUGOŚCI WYŚCIGU ===
-        if hasattr(self, 'just_pitted') and self.just_pitted:
-            race_duration = self.end_et  # Długość wyścigu w sekundach
-            
-      
-            if race_duration <= 2200: 
-                if tire_type == 2: 
-                    reward -= 12  
-                elif tire_type == 1: 
-                    reward -= 10 
-                elif tire_type == 0:
-                    reward += 10 
-            
-            # Długie wyścigi (>1h): Miękkie to STRATA (zbyt częste pit-stopy)
-            elif race_duration > 3600:  # 1 godzina
-                if tire_type == 0:  # Soft - za częste pit-stopy
-                    reward -= 15
-                elif tire_type == 2:  # Hard - IDEALNE dla długich
-                    reward += 10
-                elif tire_type == 1:  # Medium - dobry kompromis
-                    reward += 5
+        # elif not is_raining and tire_type == 3 and self.path_wetness < 0.1:  # Wet na suchym
+       
         
     
-        if hasattr(self, 'just_pitted') and self.just_pitted:
-            # Kara za przedwczesny pit-stop (za dużo paliwa)
-            if self.fuel_before_pit > 0.5:  # Więcej niż 50% paliwa
-                reward -= 8  # OSŁABIONE 15→8
+        # if hasattr(self, 'just_pitted') and self.just_pitted:
+        #     race_duration = self.end_et  
+            
+      
+        #     if race_duration <= 2200: 
+        #         if tire_type == 2: 
+        #             reward -= 12  
+        #         elif tire_type == 1: 
+        #             reward -= 10 
+        #         elif tire_type == 0:
+        #             reward += 10 
             
  
-            if self.target_fuel < self.fuel_before_pit:
-                reward -= 10  # OSŁABIONE 20→10
+    
+        # if hasattr(self, 'just_pitted') and self.just_pitted:
+        #     # Kara za przedwczesny pit-stop (za dużo paliwa)
+        #     if self.fuel_before_pit > 0.5:  # Więcej niż 50% paliwa
+        #         reward -= 8  
+            
+ 
+        #     if self.target_fuel < self.fuel_before_pit:
+        #         reward -= 10 
             
         
        
 
-        if hasattr(self, 'just_repaired') and self.just_repaired:
-            total_damage = sum(self.dent_severity)
-            if total_damage <= 1:  # Prawie brak uszkodzeń
-                reward -= 15  # OSŁABIONE 30→15
+        # if hasattr(self, 'just_repaired') and self.just_repaired:
+        #     total_damage = sum(self.dent_severity)
+        #     if total_damage <= 1:  # Prawie brak uszkodzeń
+        #         reward -= 15  
         
         
-        return reward
+        
 
              
 
@@ -646,7 +620,7 @@ class RacingEnv(gym.Env):
                         
                     
                     # ZATRZYMANIE POJAZDU
-                    data_lstm[0] = 0.006  # Ustawienie pozycji "w boksie" (upewnij się, że to nie teleportuje auta w złe miejsce!)
+                    data_lstm[0] = 0.006  # Ustawienie pozycji "w boksie" 
 
                     # --- FAZA 1: OPONY ---
                     if self.pit_stage == 0:
@@ -676,14 +650,12 @@ class RacingEnv(gym.Env):
                     # --- FAZA 2: PALIWO ---
                     elif self.pit_stage == 2:
                         self.target_fuel = action[3] * 0.2
-                        current_fuel = self.fuel_tank_capacity # lub data_lstm[1] zależnie jak przechowujesz
+                        current_fuel = self.fuel_tank_capacity 
                         self.fuel_needed = self.target_fuel - current_fuel
 
                         if self.fuel_needed > 0:
-                            # Obliczamy czas tankowania (np. 1 litr = 1 step)
-                            # Możesz też tankować "po trochu" w każdej klatce
-                            # self.pit_timer = int(fuel_needed * 10) # Przykładowy przelicznik czasu
-                            # Do statystyk
+                            
+                         
                             self.pit_stage = 2.5 # Wykonywanie tankowania (stan pośredni)
                         else:
                             self.pit_stage = 3 # Nie trzeba tankować, idziemy do napraw
@@ -735,9 +707,9 @@ class RacingEnv(gym.Env):
 
                 # 3. POWOLNY START ("WAKE UP" LSTM)
                 elif data_lstm[0] > pit_zone_start and self.in_pits == 1.0 and self.pitted:
-                    # Tutaj "oszukujemy" LSTM, powoli zmieniając parametry, żeby zaczął "czuć" jazdę
+                
                     data_lstm[0] += 0.0005  # Powolne ruszanie (zwiększanie dystansu)
-                    # data_lstm[1] -= 0.001   # Symulacja zużycia paliwa
+                 
                     
         
 
@@ -772,17 +744,8 @@ class RacingEnv(gym.Env):
             self.wheel2_temp = data_lstm[7]
             self.wheel3_temp = data_lstm[8]
             self.wheel4_temp = data_lstm[9]
-            # self.path_wetness = data_lstm[10]
+        
             self.curr_step += 1
-
-            # if self.curr_step % 100 == 0:
-            #     print(f"Step: {self.curr_step}/{self.total_steps}")
-
-            
-
-            # self.state = self._extract_state(self.telemetry_data[self.current_lap], self.scoring_data[self.current_lap])
-            
-            
 
             self.state = np.array([
                 self.lap_dist,
@@ -1222,7 +1185,7 @@ class RacingEnv(gym.Env):
         plt.savefig(f'ai/rl_training_race_historyplots/race_history_plots_{self.num_race}.png', dpi=100)
         plt.show()
         # plt.close(fig)
-# ...existing code...
+
         
 
 

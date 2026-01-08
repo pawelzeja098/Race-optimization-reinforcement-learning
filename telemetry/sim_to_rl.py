@@ -15,7 +15,7 @@ import shutil
 def run_rl_agent(client, model, scaler_X_min_max, scaler_X_robust, usage_multiplier=3.0, save_dir="telemetry_logs"):
     print("Start wątku RL - tryb: Scoring -> Next Telem")
 
-    # Funkcja atomowego zapisu (zapobiega uszkodzeniom przy Ctrl+C)
+    #(zapobiega uszkodzeniom przy Ctrl+C)
     def atomic_save(data, filepath):
         """Zapisuje JSON do tymczasowego pliku, potem rename (atomic)"""
         temp_fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(filepath), suffix='.json.tmp')
@@ -50,7 +50,7 @@ def run_rl_agent(client, model, scaler_X_min_max, scaler_X_robust, usage_multipl
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     scoring_file = os.path.join(save_dir, f"race_scoring_{timestamp}.json")
     telemetry_file = os.path.join(save_dir, f"race_telemetry_{timestamp}.json")
-    print(f"📊 Zapisywanie danych do:")
+    print(f" Zapisywanie danych do:")
     print(f"   Scoring:    {scoring_file}")
     print(f"   Telemetry:  {telemetry_file}")
 
@@ -75,16 +75,16 @@ def run_rl_agent(client, model, scaler_X_min_max, scaler_X_robust, usage_multipl
                 if not player:
                     continue
                 
-                # ========================================
+               
                 # LOGOWANIE: Czekaj na parę scoring+telemetry (jak w LMU_plugin)
-                # ========================================
+               
                 scoring_counter += 1
                 if scoring_counter % 2 == 0:  # Co drugi scoring
                     # Zapisz scoring tymczasowo
                     temp_scoring = data.copy()
                     temp_scoring["mVehicles"] = [player]
                     
-                    # Wyczyść kolejkę ze starych telemetrii (jak w LMU_plugin)
+                  
                     while True:
                         try:
                             client.queue.get_nowait()
@@ -130,29 +130,24 @@ def run_rl_agent(client, model, scaler_X_min_max, scaler_X_robust, usage_multipl
                                 print(f"⚠️ Błąd zapisu: {e}")
                         
                         if record_counter % 100 == 0:
-                            print(f"💾 [{record_counter}] Auto-zapis: {len(scoring_log)} par")
+                            print(f" [{record_counter}] Auto-zapis: {len(scoring_log)} par")
                         
                         # ========================================
                         # NIE MA JUŻ OBLICZEŃ RL TUTAJ - przeniesione do triggera sektora
                         # ========================================
                     else:
-                        print(f"⚠️ Brak telemetrii dla scoringu #{scoring_counter}")
+                        print(f" Brak telemetrii dla scoringu #{scoring_counter}")
                 # ========================================
                 
                 curr_sector = player["mSector"]
                 
                 # Debug: Pokaż zmianę sektora
                 if curr_sector != prev_sector:
-                    print(f"🏁 Sektor: {prev_sector} → {curr_sector} (Okr: {player['mTotalLaps']})")
+                    print(f" Sektor: {prev_sector} → {curr_sector} (Okr: {player['mTotalLaps']})")
             
-                # WARUNEK WYZWOLENIA:
-                # Właśnie wjechaliśmy w sektor 2 (a wcześniej byliśmy w innym, np. 1)
-                # I NIE mamy już oczekującego scoringu (żeby nie nadpisać go dwa razy w tej samej sekundzie)
+               
                 if curr_sector == 0 and prev_sector == 2 and pending_scoring is None:
-                    print(f"\n{'='*60}")
-                    print(f"⚡ TRIGGER! Sektor 0 po 2 - Okrążenie {player['mTotalLaps']}")
-                    print(f"{'='*60}")
-                    
+                 
                     # Przygotowujemy dane scoringu pod extrakcję
                     data["mVehicles"] = [player]
                     pending_scoring = data
@@ -227,14 +222,12 @@ def run_rl_agent(client, model, scaler_X_min_max, scaler_X_robust, usage_multipl
                     pending_scoring = None   
 
     except KeyboardInterrupt:
-        print("\n⚠️ Przerwano przez użytkownika (Ctrl+C)")
+        print("\nPrzerwano przez użytkownika (Ctrl+C)")
     
     finally:
-        # ========================================
-        # ZAPIS KOŃCOWY - wykonuje się ZAWSZE (atomic write)
-        # ========================================
+   
         print(f"\n{'='*60}")
-        print(f"🏁 Koniec sesji - zapisuję dane końcowe...")
+        print(f" Koniec sesji - zapisuję dane końcowe...")
         if scoring_log or telemetry_log:
             try:
                 atomic_save(scoring_log, scoring_file)
@@ -243,9 +236,9 @@ def run_rl_agent(client, model, scaler_X_min_max, scaler_X_robust, usage_multipl
                 print(f"   Scoring:    {len(scoring_log)} rekordów -> {scoring_file}")
                 print(f"   Telemetry:  {len(telemetry_log)} rekordów -> {telemetry_file}")
             except Exception as e:
-                print(f"❌ Błąd zapisu końcowego: {e}")
+                print(f" Błąd zapisu końcowego: {e}")
         else:
-            print("⚠️ Brak rekordów do zapisania")
+            print(" Brak rekordów do zapisania")
         print(f"{'='*60}\n")
 
 
@@ -293,7 +286,7 @@ def filtr_data(telem_raw, scoring_raw):
 
     # ✅ DODAJ SPRAWDZENIE
     if not player_vehicle:
-        raise ValueError("❌ Nie znaleziono gracza w danych Scoring!")
+        raise ValueError(" Nie znaleziono gracza w danych Scoring!")
 
     subset_scoring_vehicle = {k: player_vehicle.get(k) for k in wanted_keys}
     

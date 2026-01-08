@@ -23,8 +23,8 @@ class LSTMStatePredictor(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, num_layers=1,dropout_prob=0.3):
         super(LSTMStatePredictor, self).__init__()
         
-        # Zapisz parametry (potrzebne do ewentualnego ręcznego
-        # tworzenia stanu, choć nie jest to już wymagane w forward)
+        
+
         self.num_layers = num_layers
         self.hidden_size = hidden_size
         lstm_dropout_prob = dropout_prob if num_layers > 1 else 0.0
@@ -47,12 +47,10 @@ class LSTMStatePredictor(nn.Module):
         self.output_size = output_size
 
     def forward(self, x, h_c=None):
-        # 1. Nie musisz ręcznie inicjować h_c. 
+        # 1. Nie trzeba ręcznie inicjować h_c. 
         #    nn.LSTM zrobi to automatycznie, jeśli h_c jest None.
         
-        # 2. Przetwórz CAŁĄ sekwencję
-        #    x ma kształt: [B, seq_len, 37]
-        #    out będzie miał kształt: [B, seq_len, hidden_size]
+  
         out, h_c = self.lstm(x, h_c) 
 
         out = self.dropout_layer(out)  # Zastosuj dropout do wyjścia LSTM
@@ -141,17 +139,16 @@ def scale_single_input(raw_vector_x, scaler_X_min_max, scaler_X_robust):
  
     
     # raw_vector_x[cont_indices_x] ma kształt (19,)
-    # Musimy go przekształcić na (1, 19) dla scalera
+
     x_min_max_scaled = scaler_X_min_max.transform([raw_vector_x[min_max_scaler_x]])
     x_robust_scaled = scaler_X_robust.transform([raw_vector_x[robust_scaler_x]])
     
     # raw_vector_x[cat_indices_x] ma kształt (18,)
-    # --- POPRAWKA TUTAJ ---
+
     # Musimy go przekształcić na (1, 19), aby pasował do hstack
     x_no_scaled = raw_vector_x[no_scaler_x].reshape(1, -1)
     
-    # Teraz łączymy (1, 19) z (1, 18) -> (1, 37)
-    # i spłaszczamy z powrotem do 1D (37,)
+  
     return np.hstack([x_no_scaled, x_min_max_scaled, x_robust_scaled]).flatten()
        
 
@@ -192,11 +189,11 @@ def generate_predictions(model, input_seq,scaler_X_min_max=None, scaler_X_robust
         predictions_raw[:, no_scaler_y] = predictions_scaled[:, no_scaler_y]
         
         # B. MinMax (Delty) - Odwracamy
-        # scaler_Y_min_max oczekuje 5 cech, dajemy mu 5 cech
+  
         predictions_raw[:, min_max_scaler_y] = scaler_Y_min_max.inverse_transform(predictions_scaled[:, min_max_scaler_y])
         
         # C. Robust (Temperatury) - Odwracamy
-        # scaler_Y_robust oczekuje 4 cech, dajemy mu 4 cechy
+     
         predictions_raw[:, robust_scaler_y] = scaler_Y_robust.inverse_transform(predictions_scaled[:, robust_scaler_y])
         
         h_c = (h_c[0].detach(), h_c[1].detach())  # Odłączamy stany od grafu obliczeń
@@ -341,12 +338,12 @@ def train_model():
             # y_pred ma kształt (batch_size, SEQUENCE_LENGTH, 12)
             
             # Obliczamy stratę dla całej sekwencji na raz
-            # Musimy indeksować wymiar cech [:, :, ...]
+    
             loss_progress = loss_cont(y_pred[:, :, 0:2], y_batch[:, :, 0:2])
             loss_fuel     = loss_cont(y_pred[:, :, 2:3], y_batch[:, :, 2:3])
             loss_wear     = loss_cont(y_pred[:, :, 3:7], y_batch[:, :, 3:7])
             loss_temp     = loss_cont(y_pred[:, :, 7:11], y_batch[:, :, 7:11])
-            # loss_wet      = loss_cont(y_pred[:, :, 11:], y_batch[:, :, 11:])
+
             
             # Sumujemy straty (tak jak miałeś)
             loss = (weight[0] * loss_progress + 

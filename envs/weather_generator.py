@@ -81,7 +81,7 @@ def generate_weather_conditions(num_conditions,mRaining_start=0.0,mAmbientTemp_s
 
         if abs(mAmbientTemp - next_temp) < 0.1:
     
-    # Losujemy nowy cel (Twoja logika z drobnym uproszczeniem)
+    # Losujemy nowy cel
             if mAmbientTemp > 40:
                 change = choice([-3, -2, -1, 0])      # Musi spadać
             elif mAmbientTemp < 9:

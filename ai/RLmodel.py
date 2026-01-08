@@ -25,15 +25,15 @@ class ActorCritic(nn.Module):
     def __init__(self, state_dim, action_space):
         super(ActorCritic, self).__init__()
         
-        # ✅ DODAJ LayerNorm dla stabilności
+        # LayerNorm dla stabilności
         self.layer_norm = nn.LayerNorm(state_dim)
         
         # Shared layers
         self.fc1 = nn.Linear(state_dim, 256)
         self.fc2 = nn.Linear(256, 128)
         
-        # ✅ DODAJ BatchNorm
-        self.ln1 = nn.LayerNorm(256)  # ← Działa dla batch_size=1!
+        # BatchNorm
+        self.ln1 = nn.LayerNorm(256) 
         self.ln2 = nn.LayerNorm(128)
         
         # Actor heads
@@ -45,7 +45,7 @@ class ActorCritic(nn.Module):
         # Critic head
         self.critic = nn.Linear(128, 1)
         
-        # ✅ WAŻNE: Inicjalizacja wag (zapobiega NaN)
+        
         self.apply(self._init_weights)
     
     def _init_weights(self, module):
@@ -56,14 +56,14 @@ class ActorCritic(nn.Module):
                 nn.init.constant_(module.bias, 0)
     
     def forward(self, x):
-        # ✅ Normalizacja inputu
+        #  Normalizacja inputu
         x = self.layer_norm(x)
         
         # Shared layers z ReLU
         x = F.relu(self.ln1(self.fc1(x)))
         x = F.relu(self.ln2(self.fc2(x)))
         
-        # Actor outputs (logits, NIE probabilities!)
+        # Actor outputs (logits)
         action_logits = [head(x) for head in self.actor_heads]
         
         # Critic output
@@ -75,7 +75,7 @@ class ActorCritic(nn.Module):
 
 def select_action(model, state):
     """
-    ✅ POPRAWIONA WERSJA - używa logits zamiast probs
+    Select action based on current policy
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(device)
@@ -144,13 +144,13 @@ class RolloutBuffer:
 
 def ppo_update_batch(model, optimizer, buffer, batch_indices, device, clip_eps=0.2, entropy_coef=0.03, debug=False):
     """
-    ✅ CAŁKOWICIE PRZEPISANA FUNKCJA - naprawione wszystkie problemy
+    Algorytm PPO
     """
-    # ✅ 1. Sprawdź, czy batch nie jest pusty
+ 
     if len(batch_indices) == 0:
         return 0.0, 0.0, 0.0
     
-    # ✅ 2. Pobierz dane (z konwersją do numpy dla bezpieczeństwa)
+  
     states = torch.tensor(
         np.array([buffer.states[i] for i in batch_indices]), 
         dtype=torch.float32
@@ -159,7 +159,7 @@ def ppo_update_batch(model, optimizer, buffer, batch_indices, device, clip_eps=0
     actions = torch.stack([buffer.actions[i] for i in batch_indices]).to(device)
     old_log_probs = torch.stack([buffer.log_probs[i] for i in batch_indices]).to(device)
     
-    # ✅ 3. POPRAWKA: advantages i returns muszą mieć TEN SAM rozmiar co batch
+   
     advantages = torch.tensor(
         [buffer.advantages[i] for i in batch_indices], 
         dtype=torch.float32
@@ -170,18 +170,18 @@ def ppo_update_batch(model, optimizer, buffer, batch_indices, device, clip_eps=0
         dtype=torch.float32
     ).to(device)
     
-    # ✅ 4. POPRAWKA: Normalizacja advantages z zabezpieczeniem
+  
     if len(advantages) > 1:  # Potrzebujemy przynajmniej 2 sampli dla std
         adv_mean = advantages.mean()
         adv_std = advantages.std()
         
-        # ✅ Jeśli std jest bardzo małe lub 0, nie normalizuj
+       
         if adv_std > 1e-6:
             advantages = (advantages - adv_mean) / (adv_std + 1e-8)
         else:
             advantages = advantages - adv_mean  # Tylko centrowanie
     
-    # ✅ NOWE: Normalizacja RETURNS (kluczowe dla stabilnego Critic!)
+    
     if len(returns) > 1:
         ret_mean = returns.mean()
         ret_std = returns.std()
@@ -193,18 +193,17 @@ def ppo_update_batch(model, optimizer, buffer, batch_indices, device, clip_eps=0
     else:
         returns_normalized = returns
     
-    # ✅ 5. Forward pass
+   
     logits_list, values_new = model(states)
     
-    # ✅ 6. POPRAWKA: Upewnij się, że values_new ma odpowiedni kształt
-    values_new = values_new.squeeze(-1)  # [batch_size, 1] → [batch_size]
+    values_new = values_new.squeeze(-1)  
     
-    # ✅ 7. Oblicz log_probs i entropy (używając LOGITS)
+ 
     log_probs_new = []
     entropy_list = []
     
     for i, logits in enumerate(logits_list):
-        # ✅ UŻYWAJ logits, NIE probs!
+    
         dist = Categorical(logits=logits)
         
         acts = actions[:, i]
@@ -215,28 +214,22 @@ def ppo_update_batch(model, optimizer, buffer, batch_indices, device, clip_eps=0
     log_probs_new = torch.stack(log_probs_new).sum(dim=0)
     entropy = torch.stack(entropy_list).sum(dim=0).mean()
     
-    # ✅ 8. PPO ratio (USUNIĘTE zbędne clipping!)
+   
     ratio = torch.exp(log_probs_new - old_log_probs.detach())
     
     surr1 = ratio * advantages
     surr2 = torch.clamp(ratio, 1 - clip_eps, 1 + clip_eps) * advantages
     
-    # 🔍 DIAGNOSTYKA - wypisz gdy debug=True
-    # if debug:
-    #     print(f"\n🔍 DEBUG PPO:")
-    #     print(f"  Ratio: min={ratio.min().item():.3f}, max={ratio.max().item():.3f}, mean={ratio.mean().item():.3f}")
-    #     print(f"  Advantages: min={advantages.min().item():.3f}, max={advantages.max().item():.3f}, mean={advantages.mean().item():.3f}")
-    #     print(f"  Surr1 mean: {surr1.mean().item():.4f}, Surr2 mean: {surr2.mean().item():.4f}")
-    
+
     actor_loss = -torch.min(surr1, surr2).mean()
     
-    # ✅ 9. POPRAWKA: Critic loss ze ZNORMALIZOWANYMI returns
+    
     critic_loss = F.mse_loss(values_new, returns_normalized)
     
-    # ✅ 10. Total loss - ZWIĘKSZONA WAGA CRITIC (0.5→1.0)
+
     loss = actor_loss + 0.5 * critic_loss - entropy_coef * entropy
     
-    # ✅ 11. WAŻNE: Sprawdź, czy loss nie jest NaN
+   
     if torch.isnan(loss):
         print("⚠️ NaN detected in loss! Skipping update.")
         print(f"  Actor Loss: {actor_loss.item()}")
@@ -246,11 +239,11 @@ def ppo_update_batch(model, optimizer, buffer, batch_indices, device, clip_eps=0
         print(f"  Returns: min={returns.min().item():.4f}, max={returns.max().item():.4f}")
         return 0.0, 0.0, 0.0
     
-    # ✅ 12. Backward pass z gradient clipping
+
     optimizer.zero_grad()
     loss.backward()
     
-    # ✅ BARDZO WAŻNE: Gradient clipping (zapobiega exploding gradients)
+  
     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.5)
     
     optimizer.step()
@@ -297,7 +290,7 @@ def create_x(data):
     X_filtered = []
     for race in X_grouped:
         # race ma kształt (N_steps, 38)
-        # Bierzemy wszystkie wiersze (:), ale tylko wybrane kolumny (indices)
+      
         race_subset = race[:, rl_feature_indices]
         X_filtered.append(race_subset)
         
@@ -343,12 +336,11 @@ def scale_single_input(raw_vector_x, scaler_X_min_max, scaler_X_robust):
     x_robust_scaled = scaler_X_robust.transform([raw_vector_x[robust_scaler_x]])
     
     # raw_vector_x[cat_indices_x] ma kształt (18,)
-    # --- POPRAWKA TUTAJ ---
-    # Musimy go przekształcić na (1, 19), aby pasował do hstack
+    
+  
     x_no_scaled = raw_vector_x[no_scaler_x].reshape(1, -1)
     
-    # Teraz łączymy (1, 19) z (1, 18) -> (1, 37)
-    # i spłaszczamy z powrotem do 1D (37,)
+    
     return np.hstack([x_no_scaled, x_min_max_scaled, x_robust_scaled]).flatten()
 
 def save_checkpoint(model, optimizer, epoch, filename):
@@ -377,15 +369,15 @@ def train_rl_model():
     all_total_rewards = []
     all_epoch_rewards = []  # Nagroda na epokę (suma wyścigów)
     all_race_rewards = []   # Nagroda na pojedynczy wyścig
-    num_epochs = 20  # ⚡ FINALNY: 20 epok × 300 = 6000 wyścigów
+    num_epochs = 20 
 
     RACES_PER_EPOCH = 300  # 300 × 5 decyzji = ~1500 sampli (większy buffer)
     PPO_EPOCHS = 10
     BATCH_SIZE = 32  # 64/750 = 8.5% buffera (OK)
     
-    # ✅ ENTROPY SCHEDULE - BARDZO SILNA kara za losowość!
-    ENTROPY_START = 0.01   # Start: BARDZO silna kara (3x więcej niż 0.15!)
-    ENTROPY_END = 0.001    # Koniec: umiarkowana kara
+  
+    ENTROPY_START = 0.01   
+    ENTROPY_END = 0.001    
 
 
     try:
@@ -401,16 +393,13 @@ def train_rl_model():
 
 
     for epoch in range(num_epochs):
-        # ✅ Oblicz bieżący entropy_coef (liniowy spadek)
+    
         progress = epoch / max(num_epochs - 1, 1)
         current_entropy_coef = ENTROPY_START + (ENTROPY_END - ENTROPY_START) * progress
 
         epoch_total_reward = 0
         
-        # ✅ TRENING TYLKO NA 32min WYŚCIGACH (1932s)
-        # Model będzie używany tylko w takich wyścigach
-        # Faza 1 (0-9): Tylko suche warunki (solidne podstawy)
-        # Faza 2 (10-19): Dodaj deszcz (50/50) - uczenie adaptacji
+        
         race_configs = []
         
         if epoch < 10:
@@ -420,7 +409,7 @@ def train_rl_model():
             # Faza 2: Długie wyścigi, usage 3.0, losowy deszcz (50/50)
             race_configs = [(2, 1, 0)] * (RACES_PER_EPOCH // 2) + [(2, 1, 1)] * (RACES_PER_EPOCH // 2)
         
-        # Przetasuj konfiguracje (żeby nie były grupowane)
+        # Przetasuj konfiguracje
         random.shuffle(race_configs)
         
         for race_epoch, (i_time, i_usage, i_rain) in enumerate(race_configs):
@@ -430,7 +419,7 @@ def train_rl_model():
             usage_multiplier = [1.0, 3.0]
             no_rain = [True, False]
             
-            # Zawsze średni wyścig (1032s), usage 3.0
+           
             end_et = end_et[i_time]
             total_steps = total_steps[i_time]
             usage_mult = usage_multiplier[i_usage]
@@ -455,9 +444,9 @@ def train_rl_model():
                 # Wykonaj akcję. 
                 next_obs, reward, done, _ = env.step(actions)
 
-                # ✅ REWARD SCALING - silniejszy signal dla uczenia
+           
                 # print(reward)
-                reward /= 100.0  # Zmienione z /1000 na /100 dla silniejszego signalu
+                reward /= 100.0  
 
                 next_obs = scale_single_input(next_obs, scaler_minmax_X, scaler_robust_X)
 
@@ -485,19 +474,11 @@ def train_rl_model():
                 obs = next_obs
                 race_reward += reward
 
-                # end = time.perf_counter()
-                # print(f"Czas wykonania okr: {end - start:.4f} sekund")
-                # if end - start > 1.5:
-                #     print(f"Koniec wysc {done}")
-                    
-                # --- POPRAWKA 3: Usunięto blok 'if done: reset()' ---
-                # Pętla 'while' sama się zakończy, a reset nastąpi
-                # na początku następnej epoki.
+            
             epoch_total_reward += race_reward
             all_race_rewards.append(race_reward)
             # Koniec epizodu (rolloutu)
-        # epoch_total_reward /= 1000.0  # Normalizacja nagrody
-        # PPO update po zebraniu danych z całego epizodu
+        
        
         rewards_list = [r.item() for r in buffer.rewards]
         values_list = [v.item() for v in buffer.values]
@@ -509,7 +490,7 @@ def train_rl_model():
         buffer.advantages = advantages
         buffer.returns = returns
         
-        # ✅ PPO update z mini-batchami i wielokrotnymi epoch
+        # PPO update z mini-batchami i wielokrotnymi epoch
         num_samples = len(buffer.states)
         total_actor_loss = 0
         total_critic_loss = 0
@@ -525,7 +506,7 @@ def train_rl_model():
                 end = min(start + BATCH_SIZE, num_samples)
                 batch_indices = indices[start:end]
                 
-                # 🔍 DEBUG: Pierwszy batch PPO epoch 5 (środek treningu)
+                # DEBUG: Pierwszy batch PPO epoch 5 (środek treningu)
                 debug_mode = (ppo_epoch == 5 and batch_idx == 0)
                 
                 actor_loss, critic_loss, entropy = ppo_update_batch(
@@ -558,7 +539,7 @@ def train_rl_model():
             print(f"  Actor Loss: {avg_actor_loss:.4f}")
             print(f"  Critic Loss: {avg_critic_loss:.4f}")
             print(f"  Entropy: {avg_entropy:.4f}")
-            print(f"  Entropy Coef: {current_entropy_coef:.4f} (↓ zmniejsza się)")
+            print(f"  Entropy Coef: {current_entropy_coef:.4f}")
             print(f"{'='*60}")
 
             #zapsi logi do pliku
@@ -632,7 +613,7 @@ train_rl_model()
 #     save_graph=False  # Nie zapisuj jeszcze automatycznie
 # )
 
-# # Zamiast render(), wypisz źródło:
+
 # print(model_graph.visual_graph.source)
 
 # from graphviz import Digraph
