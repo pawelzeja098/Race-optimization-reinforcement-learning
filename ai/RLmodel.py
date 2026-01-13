@@ -348,8 +348,7 @@ def save_checkpoint(model, optimizer, epoch, filename):
         'epoch': epoch,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
-        # Możesz dodać inne rzeczy, np. historię nagród
-        # 'all_total_rewards': all_total_rewards 
+       
     }
     torch.save(checkpoint, filename)
     print(f"Checkpoint zapisany: {filename}")
@@ -371,7 +370,7 @@ def train_rl_model():
     all_race_rewards = []   # Nagroda na pojedynczy wyścig
     num_epochs = 20 
 
-    RACES_PER_EPOCH = 300  # 300 × 5 decyzji = ~1500 sampli (większy buffer)
+    RACES_PER_EPOCH = 150  # 300 × 5 decyzji = ~1500 sampli (większy buffer)
     PPO_EPOCHS = 10
     BATCH_SIZE = 32  # 64/750 = 8.5% buffera (OK)
     
